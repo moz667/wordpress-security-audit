@@ -5,6 +5,7 @@ services:
     volumes:
       - ./volumes/www:/var/www/html:ro
       - yara-rules:/usr/share/yara-rules:ro
+      - ./scripts/generate-whitelist.sh:/usr/local/bin/generate-whitelist.sh:ro
 
 volumes:
   yara-rules:

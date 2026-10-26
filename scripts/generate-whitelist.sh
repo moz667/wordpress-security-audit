@@ -1,11 +1,11 @@
 #!/bin/sh
 
-LATEST_WP_VERSION=7.1.3
+LATEST_WP_VERSION='7.1.3'
 
 current_wp_version=$LATEST_WP_VERSION
 
-if [ -f /var/www/html/wp-includes/version.php]; then
-    current_wp_version = `grep -E "^\$wp_version\s*=" wp-includes/version.php | awk -F\' '{print $2}'`
+if [ -f /var/www/html/wp-includes/version.php ]; then
+    current_wp_version=$(grep "^\$wp_version\s*=" /var/www/html/wp-includes/version.php | awk -F\' '{print $2}')
 fi
 
 yara_rules_main_file="/usr/share/yara-rules/php.yar"
