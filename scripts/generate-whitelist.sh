@@ -64,3 +64,40 @@ if [ -d /var/www/html/wp-content/plugins ]; then
     echo "        // [END] Plugins whitelist rules"
 fi
 # [END] Plugins
+
+
+# [START] Themes
+if [ -d /var/www/html/wp-content/themes ]; then
+    mkdir -p /usr/local/share/src/wordpress/wp-content/themes
+    cd /usr/local/share/src/wordpress/wp-content/themes
+
+    echo "        // [START] Themes whitelist rules"
+    find /var/www/html/wp-content/themes -mindepth 2 -maxdepth 2 -type f -name 'style.css' \
+    -exec sh -c '
+        for f do
+            grep -q "Theme Name:" "$f" || continue
+            dir=$(basename "$(dirname "$f")")
+            name=$(grep -m1 "Theme Name:" "$f" | sed -E "s/.*Theme Name:[[:space:]]*//; s/[[:space:]]*$//")
+            ver=$(grep -m1 "Version:" "$f" | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
+            
+            theme_found="0"
+            theme_zip_url="https://downloads.wordpress.org/theme/$dir.$ver.zip"
+            wget -q $theme_zip_url
+            if [ -f $dir.$ver.zip ]; then
+                unzip -q $dir.$ver.zip
+                rm $dir.$ver.zip
+                theme_found="1"
+            fi
+
+            if [ "$theme_found" == "1" ]; then
+                echo "        // Theme [$name]"
+                yara -r $yara_rules_main_file /usr/local/share/src/wordpress/wp-content/themes/$dir | sed -e "s/.* /sha256sum /g" | sh | sed -e "s/ .*\/usr\/local\/share\/src\/wordpress\//\" or \/\/ /g" -e "s/^/        hash.sha256(0, filesize) == \"/g" | sort | uniq
+            else
+                echo "        // Theme [$name] NOT FOUND on wordpress.org repository: $theme_zip_url"
+            fi
+        done
+    ' sh {} +
+
+    echo "        // [END] Theme whitelist rules"
+fi
+# [END] Themes
