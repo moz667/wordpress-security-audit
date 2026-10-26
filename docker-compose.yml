@@ -1,0 +1,15 @@
+services:
+  wsa:
+    build:
+      context: ./
+    volumes:
+      - ./volumes/www:/var/www/html:ro
+      - yara-rules:/usr/share/yara-rules:ro
+
+volumes:
+  yara-rules:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/yara-rules
