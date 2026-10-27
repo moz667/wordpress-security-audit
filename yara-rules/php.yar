@@ -324,7 +324,7 @@ rule DodgyStrings
         $ = "slowloris" fullword nocase
         $ = "suhosin" fullword
         $ = "sun-tzu" fullword nocase // Because quotes from the Art of War is mandatory for any cool webshell.
-    $ = /trojan (payload)?/
+        $ = /trojan (payload)?/
         $ = "uname -a" fullword
         $ = "visbot" nocase fullword
         $ = "warez" fullword nocase
