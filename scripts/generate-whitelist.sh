@@ -13,6 +13,92 @@ fi
 yara_rules_main_file="/usr/share/yara-rules/php.yar"
 export yara_rules_main_file
 
+get_yara_matched_dirs() {
+    target_dir="$1"
+    marker_path="$2"
+
+    [ -d "$target_dir" ] || return 0
+
+    yara -r "$yara_rules_main_file" "$target_dir" 2>/dev/null \
+        | sed -e "s/.* //g" \
+        | sed -E "s#^.*/${marker_path}/##; s#/.*##" \
+        | sort -u
+}
+
+process_whitelist_for_matches() {
+    asset_type="$1"
+    asset_root="$2"
+    marker_path="$3"
+    name_pattern="$4"
+    version_pattern="$5"
+    download_url_base="$6"
+    extracted_root="$7"
+
+    echo "        // [START] ${asset_type} whitelist rules"
+
+    get_yara_matched_dirs "$asset_root" "$marker_path" \
+        | while IFS= read -r asset_dir; do
+            [ -n "$asset_dir" ] || continue
+
+            asset_path="$asset_root/$asset_dir"
+            [ -d "$asset_path" ] || continue
+
+            if [ "$asset_type" = "Plugin" ]; then
+                main_file=""
+                for php_file in "$asset_path"/*.php; do
+                    [ -f "$php_file" ] || continue
+                    if sed -n '1,20p' "$php_file" | grep -Eq "Plugin Name:|Version:"; then
+                        main_file="$php_file"
+                        break
+                    fi
+                done
+
+                [ -n "$main_file" ] || {
+                    echo "        // Plugin [$asset_dir] skipped: no header metadata found in main PHP files"
+                    continue
+                }
+
+                name=$(sed -n '1,20p' "$main_file" | grep -m1 "Plugin Name:" | sed -E "s/.*Plugin Name:[[:space:]]*//; s/[[:space:]]*$//")
+                ver=$(sed -n '1,20p' "$main_file" | grep -m1 "Version:" | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
+            else
+                style_file="$asset_path/style.css"
+                if [ ! -f "$style_file" ]; then
+                    echo "        // Theme [$asset_dir] skipped: style.css not found"
+                    continue
+                fi
+
+                name=$(sed -n '1,20p' "$style_file" | grep -m1 "Theme Name:" | sed -E "s/.*Theme Name:[[:space:]]*//; s/[[:space:]]*$//")
+                ver=$(sed -n '1,20p' "$style_file" | grep -m1 "Version:" | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
+            fi
+
+            if [ -z "$name" ] || [ -z "$ver" ]; then
+                echo "        // ${asset_type} [$asset_dir] skipped: missing metadata"
+                continue
+            fi
+
+            zip_url="${download_url_base}/$asset_dir.$ver.zip"
+            wget -q "$zip_url"
+
+            if [ -f "$asset_dir.$ver.zip" ]; then
+                unzip -q "$asset_dir.$ver.zip"
+                rm -f "$asset_dir.$ver.zip"
+                echo "        // ${asset_type} [$name]"
+                yara -r "$yara_rules_main_file" "$extracted_root/$asset_dir" \
+                    | sed -e "s/.* /sha256sum /g" \
+                    | sh \
+                    | sed -e "s/ .*${extracted_root//\//\\/}\//\" or \/\/ /g" \
+                          -e "s/^/        hash.sha256(0, filesize) == \"/g" \
+                    | sort | uniq
+                rm -rf "$extracted_root/$asset_dir"
+            else
+                echo "        // ${asset_type} [$name] NOT FOUND on wordpress.org repository: $zip_url"
+            fi
+            echo ""
+        done
+
+    echo "        // [END] ${asset_type} whitelist rules"
+}
+
 if [ "$LATEST_WP_VERSION" != "$current_wp_version" ]; then
     mkdir -p /usr/local/share/src
     cd /usr/local/share/src
@@ -35,48 +121,14 @@ if [ -d "$WWWROOT/wp-content/plugins" ]; then
     mkdir -p /usr/local/share/src/wordpress/wp-content/plugins
     cd /usr/local/share/src/wordpress/wp-content/plugins
 
-    echo "        // [START] Plugins whitelist rules"
-    yara -r "$yara_rules_main_file" "$WWWROOT/wp-content/plugins" \
-        | sed -e "s/.* //g" \
-        | sed -E 's#^.*/wp-content/plugins/##; s#/.*##' \
-        | sort -u \
-        | while IFS= read -r plugin_dir; do
-            [ -n "$plugin_dir" ] || continue
-
-            plugin_path="$WWWROOT/wp-content/plugins/$plugin_dir"
-            [ -d "$plugin_path" ] || continue
-
-            name=$(grep -m1 "Plugin Name:" "$plugin_path"/*.php 2>/dev/null | head -n 1 | sed -E "s/.*Plugin Name:[[:space:]]*//; s/[[:space:]]*$//")
-            ver=$(grep -m1 "Version:" "$plugin_path"/*.php 2>/dev/null | head -n 1 | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
-
-            if [ -z "$name" ] || [ -z "$ver" ]; then
-                echo "        // Plugin [$plugin_dir] skipped: missing Plugin Name/Version metadata"
-                continue
-            fi
-
-            plugin_zip_url="https://downloads.wordpress.org/plugin/$plugin_dir.$ver.zip"
-            wget -q "$plugin_zip_url"
-
-            if [ -f "$plugin_dir.$ver.zip" ]; then
-                unzip -q "$plugin_dir.$ver.zip"
-                rm -f "$plugin_dir.$ver.zip"
-                echo "        // Plugin [$name]"
-                yara -r "$yara_rules_main_file" "/usr/local/share/src/wordpress/wp-content/plugins/$plugin_dir" \
-                    | sed -e "s/.* /sha256sum /g" \
-                    | sh \
-                    | sed -e "s/ .*\/usr\/local\/share\/src\/wordpress\//\" or \/\/ /g" \
-                          -e "s/^/        hash.sha256(0, filesize) == \"/g" \
-                    | sort | uniq
-                rm -rf "/usr/local/share/src/wordpress/wp-content/plugins/$plugin_dir"
-            else
-                echo "        // Plugin [$name] NOT FOUND on wordpress.org repository: $plugin_zip_url"
-            fi
-            echo ""
-        done
-
-    echo "        // [END] Plugins whitelist rules"
-
-    echo "        // [END] Plugins whitelist rules"
+    process_whitelist_for_matches \
+        "Plugin" \
+        "$WWWROOT/wp-content/plugins" \
+        "wp-content/plugins" \
+        "Plugin Name" \
+        "Version" \
+        "https://downloads.wordpress.org/plugin" \
+        "/usr/local/share/src/wordpress/wp-content/plugins"
 fi
 # [END] Plugins
 
@@ -86,33 +138,13 @@ if [ -d "$WWWROOT/wp-content/themes" ]; then
     mkdir -p /usr/local/share/src/wordpress/wp-content/themes
     cd /usr/local/share/src/wordpress/wp-content/themes
 
-    echo "        // [START] Themes whitelist rules"
-    find "$WWWROOT/wp-content/themes" -mindepth 2 -maxdepth 2 -type f -name 'style.css' \
-    -exec sh -c '
-        for f do
-            grep -q "Theme Name:" "$f" || continue
-            dir=$(basename "$(dirname "$f")")
-            name=$(grep -m1 "Theme Name:" "$f" | sed -E "s/.*Theme Name:[[:space:]]*//; s/[[:space:]]*$//")
-            ver=$(grep -m1 "Version:" "$f" | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
-            
-            theme_found="0"
-            theme_zip_url="https://downloads.wordpress.org/theme/$dir.$ver.zip"
-            wget -q $theme_zip_url
-            if [ -f $dir.$ver.zip ]; then
-                unzip -q $dir.$ver.zip
-                rm $dir.$ver.zip
-                theme_found="1"
-            fi
-
-            if [ "$theme_found" == "1" ]; then
-                echo "        // Theme [$name]"
-                yara -r $yara_rules_main_file /usr/local/share/src/wordpress/wp-content/themes/$dir | sed -e "s/.* /sha256sum /g" | sh | sed -e "s/ .*\/usr\/local\/share\/src\/wordpress\//\" or \/\/ /g" -e "s/^/        hash.sha256(0, filesize) == \"/g" | sort | uniq
-            else
-                echo "        // Theme [$name] NOT FOUND on wordpress.org repository: $theme_zip_url"
-            fi
-        done
-    ' sh {} +
-
-    echo "        // [END] Theme whitelist rules"
+    process_whitelist_for_matches \
+        "Theme" \
+        "$WWWROOT/wp-content/themes" \
+        "wp-content/themes" \
+        "Theme Name" \
+        "Version" \
+        "https://downloads.wordpress.org/theme" \
+        "/usr/local/share/src/wordpress/wp-content/themes"
 fi
 # [END] Themes
