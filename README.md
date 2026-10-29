@@ -56,6 +56,8 @@ The `docker-compose.yml` file does exactly this for the project workflow, mounti
 
 The image also exposes the helper scripts under `/usr/local/bin/`, so they can be executed directly inside the container as needed.
 
+For a more beginner-friendly explanation of the security concepts behind YARA, false positives, non-printable characters, and whitelist-based filtering, see [security-for-dummies.md](security-for-dummies.md).
+
 ### Script 1: `generate-whitelist.sh`
 
 Purpose:
