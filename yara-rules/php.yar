@@ -34,19 +34,20 @@ global private rule IsPhp
 }
 
 // TODO: Asks fruit-consultant how dangerous is avoid this rule
-// rule NonPrintableChars
-// {
-//   strings:
-//     /*
-//     Searching only for non-printable characters completely kills the perf,
-//     so we have to use atoms (https://gist.github.com/Neo23x0/e3d4e316d7441d9143c7)
-//     to get an acceptable speed.
-//     */
-//     $non_printables = /(function|return|base64_decode).{,256}[^\x09-\x0d\x20-\x7E]{3}/
-// 
-//   condition:
-//         (any of them) and not IsWhitelisted
-// }
+rule NonPrintableChars
+{
+  strings:
+    /*
+    Searching only for non-printable characters completely kills the perf,
+    so we have to use atoms (https://gist.github.com/Neo23x0/e3d4e316d7441d9143c7)
+    to get an acceptable speed.
+    */
+    $non_printables = /(function|return|base64_decode).{,256}[^\x09-\x0d\x20-\x7E]{3}/
+
+  condition:
+        (any of them) and not IsWhitelisted
+}
+
 
 rule PasswordProtection
 {
@@ -191,22 +192,22 @@ rule CloudFlareBypass
         2 of them // Better be safe than sorry
 }
 
-private rule IRC
-{
-    strings:
-        // TODO: Asks fruit-consultant how dangerous is avoid this pattern (its too common)
-        // $ = "USER" fullword nocase
-        $ = "PASS" fullword nocase
-        $ = "PRIVMSG" fullword nocase
-        $ = "MODE" fullword nocase
-        $ = "PING" fullword nocase
-        $ = "PONG" fullword nocase
-        $ = "JOIN" fullword nocase
-        $ = "PART" fullword nocase
+// TODO: Asks fruit-consultant how dangerous is avoid this rule (there are too common words)
+// private rule IRC
+// {
+//     strings:
+//         $ = "USER" fullword nocase
+//         $ = "PASS" fullword nocase
+//         $ = "PRIVMSG" fullword nocase
+//         $ = "MODE" fullword nocase
+//         $ = "PING" fullword nocase
+//         $ = "PONG" fullword nocase
+//         $ = "JOIN" fullword nocase
+//         $ = "PART" fullword nocase
 
-    condition:
-        5 of them
-}
+//     condition:
+//         5 of them
+// }
 
 private rule b64
 {
@@ -341,7 +342,9 @@ rule DodgyStrings
         $asp = "scripting.filesystemobject" nocase
 
     condition:
-        (IRC or 2 of them) and not IsWhitelisted
+        // Remove by removing IRC
+        // (IRC or 2 of them) and not IsWhitelisted
+        (2 of them) and not IsWhitelisted
 }
 
 rule Websites
