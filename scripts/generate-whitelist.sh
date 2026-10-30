@@ -1,187 +1,251 @@
 #!/bin/sh
+#
+# Generates YARA whitelist rules (sha256 hashes) for the WordPress core,
+# plugin and theme files of $WWWROOT that trigger the php.yar rules, using
+# the original packages as reference.
+#
+# Rules are printed to stdout, ready to be pasted between the [START]/[END]
+# markers of yara-rules/whitelists/*.yar. Progress messages go to stderr.
+#
+# Archives are resolved in this order:
+#   1. $THIRD_PARTY_ROOT/<kind>/<archive>   (vendored, read-only)
+#   2. $CACHE_ROOT/<kind>/<archive>         (previous downloads)
+#   3. WordPress.org                         (stored in the cache if valid)
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
 WWWROOT="${WWWROOT:-/var/www/html}"
+YARA_RULES="/usr/share/yara-rules/php.yar"
 
-# [START] Wordpress core
-LATEST_WP_VERSION='7.1.3'
-current_wp_version=$LATEST_WP_VERSION
+# WordPress version already covered by whitelists/wordpress.yar
+LATEST_WP_VERSION="7.1.3"
 
-if [ -f "$WWWROOT/wp-includes/version.php" ]; then
-    current_wp_version=$(grep "^\$wp_version\s*=" "$WWWROOT/wp-includes/version.php" | awk -F\' '{print $2}')
-fi
+THIRD_PARTY_ROOT="/usr/local/share/src/third-party"
+CACHE_ROOT="/usr/share/cache/wordpress-security-audit"
 
-yara_rules_main_file="/usr/share/yara-rules/php.yar"
-export yara_rules_main_file
+INDENT="        "
 
-get_yara_matched_dirs() {
-    target_dir="$1"
-    marker_path="$2"
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    [ -d "$target_dir" ] || return 0
+log() {
+    echo " * $*" >&2
+}
 
-    yara -r "$yara_rules_main_file" "$target_dir" 2>/dev/null \
-        | sed -e "s/.* //g" \
-        | sed -E "s#^.*/${marker_path}/##; s#/.*##" \
+# Prints a YARA comment line
+comment() {
+    echo "${INDENT}// $*"
+}
+
+# Prints the paths of the files under $1 matched by the YARA rules
+yara_matched_files() {
+    yara -r "$YARA_RULES" "$1" \
+        | sed 's/^[^ ]* //' \
         | sort -u
 }
 
-process_whitelist_for_matches() {
-    asset_type="$1"
-    asset_root="$2"
-    marker_path="$3"
-    name_pattern="$4"
-    version_pattern="$5"
-    download_url_base="$6"
-    extracted_root="$7"
+# Prints a whitelist condition for every matched file under $1, commented
+# with its path relative to $2
+print_hash_rules() {
+    local scan_dir="$1" base_dir="$2"
 
-    echo "        // [START] ${asset_type} whitelist rules"
+    yara_matched_files "$scan_dir" | while IFS= read -r file; do
+        [ -f "$file" ] || continue
+        printf '%shash.sha256(0, filesize) == "%s" or // %s\n' \
+            "$INDENT" \
+            "$(sha256sum "$file" | cut -d' ' -f1)" \
+            "${file#"$base_dir"/}"
+    done | sort -u
+}
 
-    get_yara_matched_dirs "$asset_root" "$marker_path" \
-        | while IFS= read -r asset_dir; do
-            [ -n "$asset_dir" ] || continue
+# Prints the value of the header field $2 (e.g. "Version") of file $1
+read_header() {
+    sed -n '1,20p' "$1" \
+        | grep -m1 "$2:" \
+        | sed -E "s/.*$2:[[:space:]]*//; s/[[:space:]]*$//"
+}
 
-            asset_path="$asset_root/$asset_dir"
-            [ -d "$asset_path" ] || continue
+# Prints the main file of the plugin in directory $1 (the PHP file with
+# the "Plugin Name:" header)
+find_plugin_main_file() {
+    local php_file
 
-            if [ "$asset_type" = "Plugin" ]; then
-                main_file=""
-                for php_file in "$asset_path"/*.php; do
-                    [ -f "$php_file" ] || continue
-                    if sed -n '1,20p' "$php_file" | grep -Eq "Plugin Name:|Version:"; then
-                        main_file="$php_file"
-                        break
-                    fi
-                done
+    for php_file in "$1"/*.php; do
+        [ -f "$php_file" ] || continue
+        if sed -n '1,20p' "$php_file" | grep -q "Plugin Name:"; then
+            echo "$php_file"
+            return
+        fi
+    done
+}
 
-                [ -n "$main_file" ] || {
-                    echo "        // Plugin [$asset_dir] skipped: no header metadata found in main PHP files"
-                    continue
-                }
+# Looks up archive $2 of kind $1 (plugins|themes|wordpress), downloading it
+# from $3 if needed. On success sets $archive_path and $archive_source.
+find_archive() {
+    local kind="$1" archive="$2" url="$3"
+    local cache_dir="$CACHE_ROOT/$kind"
 
-                name=$(sed -n '1,20p' "$main_file" | grep -m1 "Plugin Name:" | sed -E "s/.*Plugin Name:[[:space:]]*//; s/[[:space:]]*$//")
-                ver=$(sed -n '1,20p' "$main_file" | grep -m1 "Version:" | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
-            else
-                style_file="$asset_path/style.css"
-                if [ ! -f "$style_file" ]; then
-                    echo "        // Theme [$asset_dir] skipped: style.css not found"
-                    continue
-                fi
+    if [ -s "$THIRD_PARTY_ROOT/$kind/$archive" ]; then
+        archive_path="$THIRD_PARTY_ROOT/$kind/$archive"
+        archive_source="third-party"
+        return 0
+    fi
 
-                name=$(sed -n '1,20p' "$style_file" | grep -m1 "Theme Name:" | sed -E "s/.*Theme Name:[[:space:]]*//; s/[[:space:]]*$//")
-                ver=$(sed -n '1,20p' "$style_file" | grep -m1 "Version:" | sed -E "s/.*Version:[[:space:]]*//; s/[[:space:]]*$//")
-            fi
+    archive_path="$cache_dir/$archive"
 
-            if [ -z "$name" ] || [ -z "$ver" ]; then
-                echo "        // ${asset_type} [$asset_dir] skipped: missing metadata"
-                continue
-            fi
+    if [ -s "$archive_path" ]; then
+        archive_source="cached"
+        return 0
+    fi
 
-            zip_url="${download_url_base}/$asset_dir.$ver.zip"
-            archive_name="$asset_dir.$ver.zip"
-            third_party_root="/usr/local/share/src/third-party"
-            cache_root="/usr/share/cache/wordpress-security-audit"
+    archive_source="downloaded"
+    mkdir -p "$cache_dir"
 
-            if [ "$asset_type" = "Plugin" ]; then
-                third_party_dir="$third_party_root/plugins"
-                cache_dir="$cache_root/plugins"
-            else
-                third_party_dir="$third_party_root/themes"
-                cache_dir="$cache_root/themes"
-            fi
+    if wget -q -O "$archive_path" "$url" && unzip -tq "$archive_path" >/dev/null 2>&1; then
+        return 0
+    fi
 
-            mkdir -p "$third_party_dir" "$cache_dir"
+    # Never cache broken or empty downloads
+    rm -f "$archive_path"
+    return 1
+}
 
-            archive_path=""
-            archive_source=""
+# ---------------------------------------------------------------------------
+# WordPress core
+# ---------------------------------------------------------------------------
 
-            if [ -s "$third_party_dir/$archive_name" ]; then
-                archive_path="$third_party_dir/$archive_name"
-                archive_source="third-party"
-            elif [ -s "$cache_dir/$archive_name" ]; then
-                archive_path="$cache_dir/$archive_name"
-                archive_source="cache"
-            else
-                rm -f "$cache_dir/$archive_name"
-                if wget -q -O "$cache_dir/$archive_name" "$zip_url" && [ -s "$cache_dir/$archive_name" ] && unzip -t "$cache_dir/$archive_name" >/dev/null 2>&1; then
-                    archive_path="$cache_dir/$archive_name"
-                    archive_source="cache"
-                else
-                    rm -f "$cache_dir/$archive_name"
-                fi
-            fi
+process_core() {
+    local version_file="$WWWROOT/wp-includes/version.php"
+    local version="$LATEST_WP_VERSION"
+    local archive url
 
-            if [ -n "$archive_path" ] && [ -f "$archive_path" ]; then
-                if [ "$archive_source" = "third-party" ]; then
-                    echo "        // ${asset_type} [$name] using third-party archive: $archive_path"
-                elif [ "$archive_source" = "cache" ]; then
-                    echo "        // ${asset_type} [$name] using downloaded and cached archive: $archive_path ($zip_url)"
-                fi
+    if [ -f "$version_file" ]; then
+        version=$(grep "^\$wp_version[[:space:]]*=" "$version_file" | awk -F\' '{print $2}')
+    fi
 
-                unzip -q "$archive_path" -d "$PWD"
+    if [ -z "$version" ]; then
+        log "Unable to detect the WordPress version, skipping core"
+        return
+    fi
 
-                echo "        // ${asset_type} [$name]"
-                yara -r "$yara_rules_main_file" "$extracted_root/$asset_dir" \
-                    | sed -e "s/.* /sha256sum /g" \
-                    | sh \
-                    | sed -e "s/ .*${extracted_root//\//\\/}\//\" or \/\/ /g" \
-                          -e "s/^/        hash.sha256(0, filesize) == \"/g" \
-                    | sort | uniq
-                rm -rf "$extracted_root/$asset_dir"
-            else
-                echo "        // ${asset_type} [$name] NOT FOUND on wordpress.org repository: $zip_url"
-            fi
+    if [ "$version" = "$LATEST_WP_VERSION" ]; then
+        log "WordPress $version is already whitelisted, skipping core"
+        return
+    fi
+
+    archive="wordpress-$version.zip"
+    url="https://wordpress.org/$archive"
+
+    log "Fetching WordPress $version..."
+    if ! find_archive "wordpress" "$archive" "$url"; then
+        comment "WordPress [$version] NOT FOUND: $url"
+        return
+    fi
+
+    log "Unzipping WordPress $version ($archive_source)..."
+    unzip -q -o "$archive_path" -d "$WORK_DIR"
+
+    comment "[START] wordpress $version"
+    print_hash_rules "$WORK_DIR/wordpress" "$WORK_DIR/wordpress"
+    comment "[END] wordpress $version"
+
+    rm -rf "$WORK_DIR/wordpress"
+}
+
+# ---------------------------------------------------------------------------
+# Plugins & themes
+# ---------------------------------------------------------------------------
+
+# Generates the rules for the plugin/theme in directory $3
+#   $1: kind  (plugins|themes)
+#   $2: label (Plugin|Theme)
+#   $3: asset directory
+#   $4: directory where the original archive is extracted
+process_asset() {
+    local kind="$1" label="$2" asset_path="$3" extract_dir="$4"
+    local slug header_file name_field name version archive url
+
+    slug=$(basename "$asset_path")
+
+    if [ "$kind" = "plugins" ]; then
+        header_file=$(find_plugin_main_file "$asset_path")
+        name_field="Plugin Name"
+
+        if [ -z "$header_file" ]; then
+            comment "$label [$slug] skipped: no header metadata found in main PHP files"
+            return
+        fi
+    else
+        header_file="$asset_path/style.css"
+        name_field="Theme Name"
+
+        if [ ! -f "$header_file" ]; then
+            comment "$label [$slug] skipped: style.css not found"
+            return
+        fi
+    fi
+
+    name=$(read_header "$header_file" "$name_field")
+    version=$(read_header "$header_file" "Version")
+
+    if [ -z "$name" ] || [ -z "$version" ]; then
+        comment "$label [$slug] skipped: missing metadata"
+        return
+    fi
+
+    archive="$slug.$version.zip"
+    url="https://downloads.wordpress.org/${kind%s}/$archive"
+
+    if ! find_archive "$kind" "$archive" "$url"; then
+        comment "$label [$name] NOT FOUND on wordpress.org repository: $url"
+        return
+    fi
+
+    comment "$label [$name] using $archive_source archive: $archive_path"
+    unzip -q -o "$archive_path" -d "$extract_dir"
+
+    comment "$label [$name]"
+    print_hash_rules "$extract_dir/$slug" "$extract_dir"
+
+    rm -rf "${extract_dir:?}/$slug"
+}
+
+# Generates the rules for every plugin/theme with at least one YARA match
+#   $1: kind  (plugins|themes)
+#   $2: label (Plugin|Theme)
+process_assets() {
+    local kind="$1" label="$2"
+    local asset_root="$WWWROOT/wp-content/$kind"
+    local extract_dir="$WORK_DIR/$kind"
+
+    [ -d "$asset_root" ] || return 0
+    mkdir -p "$extract_dir"
+
+    comment "[START] $label whitelist rules"
+
+    yara_matched_files "$asset_root" \
+        | sed -E "s#^.*/wp-content/$kind/##; s#/.*##" \
+        | sort -u \
+        | while IFS= read -r slug; do
+            [ -n "$slug" ] && [ -d "$asset_root/$slug" ] || continue
+
+            process_asset "$kind" "$label" "$asset_root/$slug" "$extract_dir"
             echo ""
         done
 
-    echo "        // [END] ${asset_type} whitelist rules"
+    comment "[END] $label whitelist rules"
 }
 
-if [ "$LATEST_WP_VERSION" != "$current_wp_version" ]; then
-    mkdir -p /usr/local/share/src
-    cd /usr/local/share/src
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
-    echo " * Downloading wordpress $current_wp_version..."
-    wget -q https://wordpress.org/wordpress-$current_wp_version.zip
-    sleep 1
+WORK_DIR=$(mktemp -d) || exit 1
+trap 'rm -rf "$WORK_DIR"' EXIT INT TERM
 
-    echo " * Unziping wordpress $current_wp_version..."
-    unzip -q wordpress-$current_wp_version.zip
-
-    echo "        // [START] wordpress $current_wp_version"
-    yara -r $yara_rules_main_file /usr/local/share/src/ | sed -e "s/.* /sha256sum /g" | sh | sed -e "s/ .*\/usr\/local\/share\/src\/wordpress\//\" or \/\/ /g" -e "s/^/        hash.sha256(0, filesize) == \"/g" | sort | uniq
-    echo "        // [END] wordpress $current_wp_version"
-fi
-# [END] Wordpress core
-
-# [START] Plugins
-if [ -d "$WWWROOT/wp-content/plugins" ]; then
-    mkdir -p /usr/local/share/src/wordpress/wp-content/plugins
-    cd /usr/local/share/src/wordpress/wp-content/plugins
-
-    process_whitelist_for_matches \
-        "Plugin" \
-        "$WWWROOT/wp-content/plugins" \
-        "wp-content/plugins" \
-        "Plugin Name" \
-        "Version" \
-        "https://downloads.wordpress.org/plugin" \
-        "/usr/local/share/src/wordpress/wp-content/plugins"
-fi
-# [END] Plugins
-
-
-# [START] Themes
-if [ -d "$WWWROOT/wp-content/themes" ]; then
-    mkdir -p /usr/local/share/src/wordpress/wp-content/themes
-    cd /usr/local/share/src/wordpress/wp-content/themes
-
-    process_whitelist_for_matches \
-        "Theme" \
-        "$WWWROOT/wp-content/themes" \
-        "wp-content/themes" \
-        "Theme Name" \
-        "Version" \
-        "https://downloads.wordpress.org/theme" \
-        "/usr/local/share/src/wordpress/wp-content/themes"
-fi
-# [END] Themes
+process_core
+process_assets "plugins" "Plugin"
+process_assets "themes" "Theme"
