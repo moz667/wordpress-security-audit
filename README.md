@@ -76,7 +76,17 @@ docker compose run --rm wsa /usr/local/bin/generate-whitelist.sh
 
 This is the recommended workflow for the project because the compose file mounts the custom rule directory in `/usr/share/yara-rules`, allowing the generated whitelist to be reused across scans without rewriting the image or the base ruleset.
 
-This script reads the WordPress files in `/var/www/html`, extracts the plugin/theme metadata (`Plugin Name:`, `Theme Name:`, `Version:`), downloads the matching official packages, and generates hash-based whitelist rules to reduce false positives when scanning for malicious code.
+This script reads the WordPress files in `/var/www/html`, extracts the plugin/theme metadata (`Plugin Name:`, `Theme Name:`, `Version:`), and resolves the matching package using a fallback chain before generating hash-based whitelist rules.
+
+The resolution order is:
+
+1. `/usr/local/share/src/third-party/plugins` or `/usr/local/share/src/third-party/themes`
+2. `/usr/share/cache/wordpress-security-audit/plugins` or `/usr/share/cache/wordpress-security-audit/themes`
+3. `wget` from the official WordPress.org repository
+
+This means that vendored or manually supplied third-party archives take precedence, while a local cache is used for successful downloads to avoid repeating network requests. Broken or empty downloads are discarded instead of being cached, and only valid ZIP files that pass `unzip -t` are kept. This is especially useful for old, paid, or otherwise unavailable plugins/themes whose original ZIP cannot always be fetched from WordPress.org.
+
+In the compose setup, the local `volumes/third-party` directory is mounted read-only at `/usr/local/share/src/third-party`, and the `volumes/cache` directory is mounted read-write at `/usr/share/cache/wordpress-security-audit` so the script can reuse validated archives across runs.
 
 ### Script 2: `sanitize-yara-matched-images.sh`
 
