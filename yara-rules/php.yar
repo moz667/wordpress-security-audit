@@ -74,7 +74,10 @@ rule ObfuscatedPhp
         $concat = /(\$[^\n\r]+\.){5}/  // concatenation of more than 5 words
         $concat_with_spaces = /(\$[^\n\r]+\. ){5}/  // concatenation of more than 5 words, with spaces
         $var_as_func = /\$_(GET|POST|COOKIE|REQUEST|SERVER)\s*\[[^\]]+\]\s*\(/
-        $comment = /\/\*([^*]|\*[^\/])*\*\/\s*\(/  // eval /* comment */ (php_code)
+        // eval /* comment */ (php_code)
+        // Requires a callee before the comment and a text comment body (printable ASCII,
+        // whitespace or valid UTF-8) to avoid false positives on binaries such as images.
+        $comment = /[\w\])'"}]\s*\/\*([\t\n\r\x20-\x29\x2b-\x7e]|\*[\t\n\r\x20-\x2e\x30-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})*\*\/\s*\(/
 condition:
         (any of them) and not IsWhitelisted
 }
