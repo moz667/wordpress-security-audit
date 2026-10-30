@@ -24,99 +24,88 @@ include "whitelist.yar"
         - https://stackoverflow.com/questions/3115559/exploitable-php-functions
 */
 
-global private rule IsPhp
-{
+global private rule IsPhp {
     strings:
         $php = /<\?[^x]/
-
     condition:
         $php and filesize < 5MB
 }
 
-// TODO: Asks fruit-consultant how dangerous is avoid this rule
-rule NonPrintableChars
-{
-  strings:
-    /*
-    Searching only for non-printable characters completely kills the perf,
-    so we have to use atoms (https://gist.github.com/Neo23x0/e3d4e316d7441d9143c7)
-    to get an acceptable speed.
-    */
-    $non_printables = /(function|return|base64_decode).{,256}[^\x09-\x0d\x20-\x7E]{3}/
-
-  condition:
+rule NonPrintableChars {
+    strings:
+        /*
+        Searching only for non-printable characters completely kills the perf,
+        so we have to use atoms (https://gist.github.com/Neo23x0/e3d4e316d7441d9143c7)
+        to get an acceptable speed.
+        */
+        $non_printables = /(function|return|base64_decode).{,256}[^\x09-\x0d\x20-\x7E]{3}/
+    condition:
         (any of them) and not IsWhitelisted
 }
 
-
-rule PasswordProtection
-{
+rule PasswordProtection {
     strings:
-        $md5 = /md5\s*\(\s*\$_(GET|REQUEST|POST|COOKIE|SERVER)[^)]+\)\s*===?\s*['"][0-9a-f]{32}['"]/ nocase
+        $md5  = /md5\s*\(\s*\$_(GET|REQUEST|POST|COOKIE|SERVER)[^)]+\)\s*===?\s*['"][0-9a-f]{32}['"]/ nocase
         $sha1 = /sha1\s*\(\s*\$_(GET|REQUEST|POST|COOKIE|SERVER)[^)]+\)\s*===?\s*['"][0-9a-f]{40}['"]/ nocase
     condition:
         (any of them) and not IsWhitelisted
 }
 
-rule ObfuscatedPhp
-{
+rule ObfuscatedPhp {
     strings:
-        $eval = /(<\?php|[;{}])[ \t]*@?(eval|preg_replace|system|assert|passthru|(pcntl_)?exec|shell_exec|call_user_func(_array)?)\s*\(/ nocase  // ;eval( <- this is dodgy
-        $eval_comment = /(eval|preg_replace|system|assert|passthru|(pcntl_)?exec|shell_exec|call_user_func(_array)?)\/\*[^\*]*\*\/\(/ nocase  // eval/*lol*/( <- this is dodgy
-        $b374k = "'ev'.'al'"
-        $align = /(\$\w+=[^;]*)*;\$\w+=@?\$\w+\(/  //b374k
-        $weevely3 = /\$\w=\$[a-zA-Z]\('',\$\w\);\$\w\(\);/  // weevely3 launcher
-        $c99_launcher = /;\$\w+\(\$\w+(,\s?\$\w+)+\);/  // http://bartblaze.blogspot.fr/2015/03/c99shell-not-dead.html
+        $eval               = /(<\?php|[;{}])[ \t]*@?(eval|preg_replace|system|assert|passthru|(pcntl_)?exec|shell_exec|call_user_func(_array)?)\s*\(/ nocase  // ;eval( <- this is dodgy
+        $eval_comment       = /(eval|preg_replace|system|assert|passthru|(pcntl_)?exec|shell_exec|call_user_func(_array)?)\/\*[^\*]*\*\/\(/ nocase  // eval/*lol*/( <- this is dodgy
+        $b374k              = "'ev'.'al'"
+        $align              = /(\$\w+=[^;]*)*;\$\w+=@?\$\w+\(/  //b374k
+        $weevely3           = /\$\w=\$[a-zA-Z]\('',\$\w\);\$\w\(\);/  // weevely3 launcher
+        $c99_launcher       = /;\$\w+\(\$\w+(,\s?\$\w+)+\);/  // http://bartblaze.blogspot.fr/2015/03/c99shell-not-dead.html
         // https://github.com/UltimateHackers/nano
         // The index must be text (printable ASCII, tab or valid UTF-8) to avoid false positives on binaries such as images.
-        $nano = /\$[a-z0-9-_]+\[([\t\x20-\x5c\x5e-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})+\]\(/
-        $ninja = /base64_decode[^;]+getallheaders/ //https://github.com/UltimateHackers/nano
-        $variable_variable = /\${\$[0-9a-zA-z]+}/
-        $too_many_chr = /(chr\([\d]+\)\.){8}/  // concatenation of more than eight `chr()`
-        $concat = /(\$[^\n\r]+\.){5}/  // concatenation of more than 5 words
+        $nano               = /\$[a-z0-9-_]+\[([\t\x20-\x5c\x5e-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})+\]\(/
+        $ninja              = /base64_decode[^;]+getallheaders/  //https://github.com/UltimateHackers/nano
+        $variable_variable  = /\${\$[0-9a-zA-z]+}/
+        $too_many_chr       = /(chr\([\d]+\)\.){8}/  // concatenation of more than eight `chr()`
+        $concat             = /(\$[^\n\r]+\.){5}/  // concatenation of more than 5 words
         $concat_with_spaces = /(\$[^\n\r]+\. ){5}/  // concatenation of more than 5 words, with spaces
-        $var_as_func = /\$_(GET|POST|COOKIE|REQUEST|SERVER)\s*\[[^\]]+\]\s*\(/
+        $var_as_func        = /\$_(GET|POST|COOKIE|REQUEST|SERVER)\s*\[[^\]]+\]\s*\(/
         // eval /* comment */ (php_code)
         // Requires a callee before the comment and a text comment body (printable ASCII,
         // whitespace or valid UTF-8) to avoid false positives on binaries such as images.
-        $comment = /[\w\])'"}]\s*\/\*([\t\n\r\x20-\x29\x2b-\x7e]|\*[\t\n\r\x20-\x2e\x30-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})*\*\/\s*\(/
-condition:
-        (any of them) and not IsWhitelisted
-}
-
-rule DodgyPhp
-{
-    strings:
-        $basedir_bypass = /curl_init\s*\(\s*["']file:\/\// nocase
-        $basedir_bypass2 = "file:file:///" // https://www.intelligentexploit.com/view-details.html?id=8719
-        $disable_magic_quotes = /set_magic_quotes_runtime\s*\(\s*0/ nocase
-
-        $execution = /\b(eval|assert|passthru|exec|include|system|pcntl_exec|shell_exec|base64_decode|`|array_map|ob_start|call_user_func(_array)?)\s*\(\s*(base64_decode|php:\/\/input|str_rot13|gz(inflate|uncompress)|getenv|pack|\\?\$_(GET|REQUEST|POST|COOKIE|SERVER))/ nocase  // function that takes a callback as 1st parameter
-        $execution2 = /\b(array_filter|array_reduce|array_walk(_recursive)?|array_walk|assert_options|uasort|uksort|usort|preg_replace_callback|iterator_apply)\s*\(\s*[^,]+,\s*(base64_decode|php:\/\/input|str_rot13|gz(inflate|uncompress)|getenv|pack|\\?\$_(GET|REQUEST|POST|COOKIE|SERVER))/ nocase  // functions that takes a callback as 2nd parameter
-        $execution3 = /\b(array_(diff|intersect)_u(key|assoc)|array_udiff)\s*\(\s*([^,]+\s*,?)+\s*(base64_decode|php:\/\/input|str_rot13|gz(inflate|uncompress)|getenv|pack|\\?\$_(GET|REQUEST|POST|COOKIE|SERVER))\s*\[[^]]+\]\s*\)+\s*;/ nocase  // functions that takes a callback as 2nd parameter
-
-        $htaccess = "SetHandler application/x-httpd-php"
-        $iis_com = /IIS:\/\/localhost\/w3svc/
-        $include = /include\s*\(\s*[^\.]+\.(png|jpg|gif|bmp)/  // Clever includes
-        $ini_get = /ini_(get|set|restore)\s*\(\s*['"](safe_mode|open_basedir|disable_(function|classe)s|safe_mode_exec_dir|safe_mode_include_dir|register_globals|allow_url_include)/ nocase
-        $pr = /(preg_replace(_callback)?|mb_ereg_replace|preg_filter)\s*\([^)]*(\/|\\x2f)(e|\\x65)['"]/  nocase // http://php.net/manual/en/function.preg-replace.php
-        $register_function = /register_[a-z]+_function\s*\(\s*['"]\s*(eval|assert|passthru|exec|include|system|shell_exec|`)/  // https://github.com/nbs-system/php-malware-finder/issues/41
-        $safemode_bypass = /\x00\/\.\.\/|LD_PRELOAD/
-        $shellshock = /\(\)\s*{\s*[a-z:]\s*;\s*}\s*;/
-        $udp_dos = /fsockopen\s*\(\s*['"]udp:\/\// nocase
-        $various = "<!--#exec cmd="  //http://www.w3.org/Jigsaw/Doc/User/SSI.html#exec
-        $at_eval = /@eval\s*\(/ nocase
-        $double_var = /\${\s*\${/
-        $extract = /extract\s*\(\s*\$_(GET|POST|REQUEST|COOKIE|SERVER)/
-        $reversed = /noitcnuf_etaerc|metsys|urhtssap|edulcni|etucexe_llehs/ nocase
-				$silenced_include =/@\s*include\s*/ nocase
-
+        $comment            = /[\w\])'"}]\s*\/\*([\t\n\r\x20-\x29\x2b-\x7e]|\*[\t\n\r\x20-\x2e\x30-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})*\*\/\s*\(/
     condition:
         (any of them) and not IsWhitelisted
 }
 
-rule DangerousPhp
-{
+rule DodgyPhp {
+    strings:
+        $basedir_bypass       = /curl_init\s*\(\s*["']file:\/\// nocase
+        $basedir_bypass2      = "file:file:///"  // https://www.intelligentexploit.com/view-details.html?id=8719
+        $disable_magic_quotes = /set_magic_quotes_runtime\s*\(\s*0/ nocase
+
+        $execution  = /\b(eval|assert|passthru|exec|include|system|pcntl_exec|shell_exec|base64_decode|`|array_map|ob_start|call_user_func(_array)?)\s*\(\s*(base64_decode|php:\/\/input|str_rot13|gz(inflate|uncompress)|getenv|pack|\\?\$_(GET|REQUEST|POST|COOKIE|SERVER))/ nocase  // function that takes a callback as 1st parameter
+        $execution2 = /\b(array_filter|array_reduce|array_walk(_recursive)?|array_walk|assert_options|uasort|uksort|usort|preg_replace_callback|iterator_apply)\s*\(\s*[^,]+,\s*(base64_decode|php:\/\/input|str_rot13|gz(inflate|uncompress)|getenv|pack|\\?\$_(GET|REQUEST|POST|COOKIE|SERVER))/ nocase  // functions that takes a callback as 2nd parameter
+        $execution3 = /\b(array_(diff|intersect)_u(key|assoc)|array_udiff)\s*\(\s*([^,]+\s*,?)+\s*(base64_decode|php:\/\/input|str_rot13|gz(inflate|uncompress)|getenv|pack|\\?\$_(GET|REQUEST|POST|COOKIE|SERVER))\s*\[[^]]+\]\s*\)+\s*;/ nocase  // functions that takes a callback as 2nd parameter
+
+        $htaccess          = "SetHandler application/x-httpd-php"
+        $iis_com           = /IIS:\/\/localhost\/w3svc/
+        $include           = /include\s*\(\s*[^\.]+\.(png|jpg|gif|bmp)/  // Clever includes
+        $ini_get           = /ini_(get|set|restore)\s*\(\s*['"](safe_mode|open_basedir|disable_(function|classe)s|safe_mode_exec_dir|safe_mode_include_dir|register_globals|allow_url_include)/ nocase
+        $pr                = /(preg_replace(_callback)?|mb_ereg_replace|preg_filter)\s*\([^)]*(\/|\\x2f)(e|\\x65)['"]/ nocase  // http://php.net/manual/en/function.preg-replace.php
+        $register_function = /register_[a-z]+_function\s*\(\s*['"]\s*(eval|assert|passthru|exec|include|system|shell_exec|`)/  // https://github.com/nbs-system/php-malware-finder/issues/41
+        $safemode_bypass   = /\x00\/\.\.\/|LD_PRELOAD/
+        $shellshock        = /\(\)\s*{\s*[a-z:]\s*;\s*}\s*;/
+        $udp_dos           = /fsockopen\s*\(\s*['"]udp:\/\// nocase
+        $various           = "<!--#exec cmd="  //http://www.w3.org/Jigsaw/Doc/User/SSI.html#exec
+        $at_eval           = /@eval\s*\(/ nocase
+        $double_var        = /\${\s*\${/
+        $extract           = /extract\s*\(\s*\$_(GET|POST|REQUEST|COOKIE|SERVER)/
+        $reversed          = /noitcnuf_etaerc|metsys|urhtssap|edulcni|etucexe_llehs/ nocase
+        $silenced_include  = /@\s*include\s*/ nocase
+    condition:
+        (any of them) and not IsWhitelisted
+}
+
+rule DangerousPhp {
     strings:
         $system = "system" fullword nocase  // localroot bruteforcers have a lot of this
 
@@ -150,7 +139,6 @@ rule DangerousPhp
         $ = "posix_setgid" fullword nocase
         $ = "posix_setpgid" fullword nocase
         $ = "posix_setsid" fullword nocase
-        $ = "posix_setsid" fullword nocase
         $ = "posix_setuid" fullword nocase
         $ = "preg_replace_callback" fullword
         $ = "proc_open" fullword nocase
@@ -166,35 +154,30 @@ rule DangerousPhp
         $ = "suhosin.executor.func.blacklist" nocase
         $ = "unregister_tick_function" fullword nocase
         $ = "win32_create_service" fullword nocase
-        $ = "xmlrpc_decode" fullword nocase 
+        $ = "xmlrpc_decode" fullword nocase
         $ = /ob_start\s*\(\s*[^\)]/  //ob_start('assert'); echo $_REQUEST['pass']; ob_end_flush();
 
         $whitelist = /escapeshellcmd|escapeshellarg/ nocase
-
     condition:
         (not $whitelist and (5 of them or #system > 250)) and not IsWhitelisted
 }
 
-rule HiddenInAFile
-{
+rule HiddenInAFile {
     strings:
-        $gif = {47 49 46 38 ?? 61} // GIF8[version]a
-        $png = {89 50 4E 47 0D 0a 1a 0a} // \X89png\X0D\X0A\X1A\X0A
-        $jpeg = {FF D8 FF E0 ?? ?? 4A 46 49 46 } // https://raw.githubusercontent.com/corkami/pics/master/JPG.png
-
+        $gif  = { 47 49 46 38 ?? 61 }  // GIF8[version]a
+        $png  = { 89 50 4E 47 0D 0a 1a 0a }  // \X89png\X0D\X0A\X1A\X0A
+        $jpeg = { FF D8 FF E0 ?? ?? 4A 46 49 46 }  // https://raw.githubusercontent.com/corkami/pics/master/JPG.png
     condition:
         ($gif at 0 or $png at 0 or $jpeg at 0) and (PasswordProtection or ObfuscatedPhp or DodgyPhp or DangerousPhp) and not IsWhitelisted
 }
 
-rule CloudFlareBypass
-{
+rule CloudFlareBypass {
     strings:
         $ = "chk_jschl"
         $ = "jschl_vc"
         $ = "jschl_answer"
-
     condition:
-        2 of them // Better be safe than sorry
+        2 of them  // Better be safe than sorry
 }
 
 // TODO: Asks fruit-consultant how dangerous is avoid this rule (there are too common words)
@@ -214,73 +197,62 @@ rule CloudFlareBypass
 //         5 of them
 // }
 
-private rule b64
-{
+private rule b64 {
     strings:
-        $user_agent = "SFRUUF9VU0VSX0FHRU5UCg"
-        $eval = "ZXZhbCg"
-        $system = "c3lzdGVt"
-        $preg_replace = "cHJlZ19yZXBsYWNl"
-        $exec = "ZXhlYyg"
+        $user_agent    = "SFRUUF9VU0VSX0FHRU5UCg"
+        $eval          = "ZXZhbCg"
+        $system        = "c3lzdGVt"
+        $preg_replace  = "cHJlZ19yZXBsYWNl"
+        $exec          = "ZXhlYyg"
         $base64_decode = "YmFzZTY0X2RlY29kZ"
-        $perl_shebang = "IyEvdXNyL2Jpbi9wZXJsCg"
-        $cmd_exe = "Y21kLmV4ZQ"
-        $powershell = "cG93ZXJzaGVsbC5leGU"
-
+        $perl_shebang  = "IyEvdXNyL2Jpbi9wZXJsCg"
+        $cmd_exe       = "Y21kLmV4ZQ"
+        $powershell    = "cG93ZXJzaGVsbC5leGU"
     condition:
         any of them
 }
 
-private rule hex
-{
+private rule hex {
     strings:
-        $globals = "\\x47\\x4c\\x4f\\x42\\x41\\x4c\\x53" nocase
-        $eval = "\\x65\\x76\\x61\\x6C\\x28" nocase
-        $exec = "\\x65\\x78\\x65\\x63" nocase
-        $system = "\\x73\\x79\\x73\\x74\\x65\\x6d" nocase
-        $preg_replace = "\\x70\\x72\\x65\\x67\\x5f\\x72\\x65\\x70\\x6c\\x61\\x63\\x65" nocase
+        $globals         = "\\x47\\x4c\\x4f\\x42\\x41\\x4c\\x53" nocase
+        $eval            = "\\x65\\x76\\x61\\x6C\\x28" nocase
+        $exec            = "\\x65\\x78\\x65\\x63" nocase
+        $system          = "\\x73\\x79\\x73\\x74\\x65\\x6d" nocase
+        $preg_replace    = "\\x70\\x72\\x65\\x67\\x5f\\x72\\x65\\x70\\x6c\\x61\\x63\\x65" nocase
         $http_user_agent = "\\x48\\124\\x54\\120\\x5f\\125\\x53\\105\\x52\\137\\x41\\107\\x45\\116\\x54" nocase
-        $base64_decode = "\\x61\\x73\\x65\\x36\\x34\\x5f\\x64\\x65\\x63\\x6f\\x64\\x65\\x28\\x67\\x7a\\x69\\x6e\\x66\\x6c\\x61\\x74\\x65\\x28" nocase
-    
+        $base64_decode   = "\\x61\\x73\\x65\\x36\\x34\\x5f\\x64\\x65\\x63\\x6f\\x64\\x65\\x28\\x67\\x7a\\x69\\x6e\\x66\\x6c\\x61\\x74\\x65\\x28" nocase
     condition:
         any of them
 }
 
-private rule Hpack
-{
+private rule Hpack {
     strings:
-    $globals = "474c4f42414c53" nocase
-        $eval = "6576616C28" nocase
-        $exec = "65786563" nocase
-        $system = "73797374656d" nocase
-        $preg_replace = "707265675f7265706c616365" nocase
+        $globals       = "474c4f42414c53" nocase
+        $eval          = "6576616C28" nocase
+        $exec          = "65786563" nocase
+        $system        = "73797374656d" nocase
+        $preg_replace  = "707265675f7265706c616365" nocase
         $base64_decode = "61736536345f6465636f646528677a696e666c61746528" nocase
-    
     condition:
         any of them
 }
 
-private rule strrev
-{
+private rule strrev {
     strings:
-        $globals = "slabolg" nocase fullword
-        $preg_replace = "ecalper_gerp" nocase fullword
+        $globals       = "slabolg" nocase fullword
+        $preg_replace  = "ecalper_gerp" nocase fullword
         $base64_decode = "edoced_46esab" nocase fullword
-        $gzinflate = "etalfnizg" nocase fullword
-    
+        $gzinflate     = "etalfnizg" nocase fullword
     condition:
         any of them
 }
 
-
-rule SuspiciousEncoding
-{
+rule SuspiciousEncoding {
     condition:
         (b64 or hex or strrev or Hpack) and not IsWhitelisted
 }
 
-rule DodgyStrings
-{
+rule DodgyStrings {
     strings:
         $ = ".bash_history"
         $ = /AddType\s+application\/x-httpd-(php|cgi)/ nocase
@@ -330,14 +302,14 @@ rule DodgyStrings
         $ = "rootkit" fullword nocase
         $ = "slowloris" fullword nocase
         $ = "suhosin" fullword
-        $ = "sun-tzu" fullword nocase // Because quotes from the Art of War is mandatory for any cool webshell.
+        $ = "sun-tzu" fullword nocase  // Because quotes from the Art of War is mandatory for any cool webshell.
         $ = /trojan (payload)?/
         $ = "uname -a" fullword
         $ = "visbot" nocase fullword
         $ = "warez" fullword nocase
         $ = "whoami" fullword
         $ = /(r[e3]v[e3]rs[e3]|w[3e]b|cmd)\s*sh[e3]ll/ nocase
-        $ = /-perm -0[24]000/ // find setuid files
+        $ = /-perm -0[24]000/  // find setuid files
         $ = /\/bin\/(ba)?sh/ fullword
         $ = /hack(ing|er|ed)/ nocase
         $ = /(safe_mode|open_basedir) bypass/ nocase
@@ -345,15 +317,13 @@ rule DodgyStrings
 
         $vbs = /language\s*=\s*vbscript/ nocase
         $asp = "scripting.filesystemobject" nocase
-
     condition:
         // Remove by removing IRC
         // (IRC or 2 of them) and not IsWhitelisted
         (2 of them) and not IsWhitelisted
 }
 
-rule Websites
-{
+rule Websites {
     strings:
         $ = "1337day.com" nocase
         $ = "antichat.ru" nocase
@@ -378,7 +348,6 @@ rule Websites
         $ = "shodan.io" nocase
         $ = "github.com/b374k/b374k" nocase
         $ = "mumaasp.com" nocase
-
     condition:
         (any of them) and not IsWhitelisted
 }
