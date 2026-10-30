@@ -67,7 +67,9 @@ rule ObfuscatedPhp
         $align = /(\$\w+=[^;]*)*;\$\w+=@?\$\w+\(/  //b374k
         $weevely3 = /\$\w=\$[a-zA-Z]\('',\$\w\);\$\w\(\);/  // weevely3 launcher
         $c99_launcher = /;\$\w+\(\$\w+(,\s?\$\w+)+\);/  // http://bartblaze.blogspot.fr/2015/03/c99shell-not-dead.html
-        $nano = /\$[a-z0-9-_]+\[[^]]+\]\(/ //https://github.com/UltimateHackers/nano
+        // https://github.com/UltimateHackers/nano
+        // The index must be text (printable ASCII, tab or valid UTF-8) to avoid false positives on binaries such as images.
+        $nano = /\$[a-z0-9-_]+\[([\t\x20-\x5c\x5e-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3})+\]\(/
         $ninja = /base64_decode[^;]+getallheaders/ //https://github.com/UltimateHackers/nano
         $variable_variable = /\${\$[0-9a-zA-z]+}/
         $too_many_chr = /(chr\([\d]+\)\.){8}/  // concatenation of more than eight `chr()`
