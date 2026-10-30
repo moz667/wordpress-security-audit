@@ -77,11 +77,48 @@ process_whitelist_for_matches() {
             fi
 
             zip_url="${download_url_base}/$asset_dir.$ver.zip"
-            wget -q "$zip_url"
+            archive_name="$asset_dir.$ver.zip"
+            third_party_root="/usr/local/share/src/third-party"
+            cache_root="/usr/share/cache/wordpress-security-audit"
 
-            if [ -f "$asset_dir.$ver.zip" ]; then
-                unzip -q "$asset_dir.$ver.zip"
-                rm -f "$asset_dir.$ver.zip"
+            if [ "$asset_type" = "Plugin" ]; then
+                third_party_dir="$third_party_root/plugins"
+                cache_dir="$cache_root/plugins"
+            else
+                third_party_dir="$third_party_root/themes"
+                cache_dir="$cache_root/themes"
+            fi
+
+            mkdir -p "$third_party_dir" "$cache_dir"
+
+            archive_path=""
+            archive_source=""
+
+            if [ -s "$third_party_dir/$archive_name" ]; then
+                archive_path="$third_party_dir/$archive_name"
+                archive_source="third-party"
+            elif [ -s "$cache_dir/$archive_name" ]; then
+                archive_path="$cache_dir/$archive_name"
+                archive_source="cache"
+            else
+                rm -f "$cache_dir/$archive_name"
+                if wget -q -O "$cache_dir/$archive_name" "$zip_url" && [ -s "$cache_dir/$archive_name" ] && unzip -t "$cache_dir/$archive_name" >/dev/null 2>&1; then
+                    archive_path="$cache_dir/$archive_name"
+                    archive_source="cache"
+                else
+                    rm -f "$cache_dir/$archive_name"
+                fi
+            fi
+
+            if [ -n "$archive_path" ] && [ -f "$archive_path" ]; then
+                if [ "$archive_source" = "third-party" ]; then
+                    echo "        // ${asset_type} [$name] using third-party archive: $archive_path"
+                elif [ "$archive_source" = "cache" ]; then
+                    echo "        // ${asset_type} [$name] using downloaded and cached archive: $archive_path ($zip_url)"
+                fi
+
+                unzip -q "$archive_path" -d "$PWD"
+
                 echo "        // ${asset_type} [$name]"
                 yara -r "$yara_rules_main_file" "$extracted_root/$asset_dir" \
                     | sed -e "s/.* /sha256sum /g" \

@@ -5,6 +5,8 @@ services:
     volumes:
       - ./volumes/www:/var/www/html:ro
       - yara-rules:/usr/share/yara-rules:ro
+      - ./volumes/third-party:/usr/local/share/src/third-party:ro
+      - ./volumes/cache:/usr/share/cache/wordpress-security-audit:rw
       - ./scripts/generate-whitelist.sh:/usr/local/bin/generate-whitelist.sh:ro
 
 volumes:
