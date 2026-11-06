@@ -68,26 +68,35 @@ The main script is:
 - `scripts/generate-whitelist.sh`
 
 What it does:
-- detects the WordPress version
-- identifies installed plugins and themes
-- resolves the source package
-- attempts to locate official core, plugin, and theme files
-- generates hashes for files that trigger YARA and belong to known packages
-- prints rules ready to be added to the whitelists
+- scans the site and records files that trigger YARA
+- processes every ZIP in the curated third-party volume, including packages not installed in the site
+- resolves official core, plugin, and theme reference packages for installed files that trigger YARA
+- generates hashes for matching files in those trusted packages
+- persists each validated rule block as it is generated
+- supports `--dry-run` to preview without changing whitelist files
+- validates the candidate rules and rescans the files found in the initial site scan
 
-Exact command:
+Default command (generates and persists rules incrementally):
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh > /tmp/whitelist-output.txt
+docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh
+```
+
+Preview command:
+
+```bash
+docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh --dry-run
 ```
 
 Whitelist rules are now organized by source and confidence:
 
 - `yara-rules/whitelists/10-oficial-repository.yar` — files verified against the official WordPress repository
-- `yara-rules/whitelists/20-third-party.yar` — third-party plugins and themes verified against locally available reference packages
+- `yara-rules/whitelists/20-third-party.yar` — packages from the curated third-party volume, including plugins and themes
 - `yara-rules/whitelists/99-custom.yar` — manually validated exceptions, including custom rules for image false positives
 
-The whitelist files have been refactored, but `generate-whitelist.sh` and `add-to-whitelist.sh` have not yet been updated to use them. The generator still produces core/plugin/theme-grouped output, and its previous file destinations and markers are no longer the current layout. Until the script refactor, generated entries must be reviewed and manually placed in the appropriate category.
+The cache is reserved for archives downloaded by the script from WordPress.org, so cached packages are added to the official-repository whitelist. Archives under `./volumes/third-party` are added to the third-party whitelist. Each validated block is saved immediately, so failures in later packages do not discard earlier rules. At the end of a run, `last_updated` is refreshed once in each generated whitelist that received new rules. In `--dry-run`, the script makes no whitelist or timestamp changes and reports the number of rules that would be added.
+
+The script reports progress and a concise final summary rather than printing individual hashes or successful verification lines. The summary includes the number of rules added, files that remain unverified, and errors. After the summary, unavailable reference resources are listed with their type, slug/version, and download URL. Remaining matches require investigation and are not automatically classified as malware.
 
 Source resolution:
 
@@ -104,7 +113,7 @@ This prevents legitimate plugin and theme files from being flagged as suspicious
 Use the source-based rule groups:
 
 - `10-oficial-repository.yar` for files verified against the official WordPress repository, including core, plugins, themes, or language packages
-- `20-third-party.yar` for purchased or older plugin/theme packages verified against reference copies in `./volumes/third-party` or validated cache
+- `20-third-party.yar` for packages supplied in the curated `./volumes/third-party` catalog, including purchased or older plugins and themes
 - `99-custom.yar` for manually reviewed exceptions that do not belong in a package-based whitelist
 
 Key decision:

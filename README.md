@@ -62,39 +62,44 @@ For a more beginner-friendly explanation of the security concepts behind YARA, f
 
 Purpose:
 - Detect the WordPress version installed in `/var/www/html`
-- Get the corresponding official WordPress, plugin and theme packages (see the resolution order below)
-- Generate YARA whitelist rules for the files of those original packages that trigger the `php.yar` rules:
+- Process every ZIP in the curated third-party volume, including packages not installed in the audited site
+- Resolve official WordPress, plugin and theme packages for installed files that trigger `php.yar`
+- Generate hash rules for matching files from those reference packages:
   - WordPress core files
   - Installed plugins
   - Installed themes
 
-How to use it:
+Run the generator to persist each validated rule block as it is generated:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh > whitelist-output.txt
+docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh
 ```
 
-This is the recommended workflow for the project because the compose file mounts the custom rule directory in `/usr/share/yara-rules`, allowing the generated whitelist to be reused across scans without rewriting the image or the base ruleset.
+To preview changes without writing them:
 
-The generated rules are printed to stdout, grouped in `// [START] ...` / `// [END] ...` blocks. Progress messages are printed to stderr, so redirecting stdout gives a clean rules file. The `-T` flag is required for this: without it `docker compose run` allocates a TTY and stderr gets mixed into stdout.
+```bash
+docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh --dry-run
+```
+
+Progress and a concise summary are printed to stderr. Hash rules are stored in the mounted whitelist files rather than printed to stdout. If a package cannot be resolved, processing continues and already validated rules remain saved. After the summary, the script lists unavailable resources with their type, slug/version, and download URL. Unresolved files or package errors cause a non-zero exit status.
 
 The whitelist rules are currently organized by source and confidence:
 
 - `yara-rules/whitelists/10-oficial-repository.yar` — files verified against the official WordPress repository.
-- `yara-rules/whitelists/20-third-party.yar` — third-party plugins and themes verified against locally available reference packages.
+- `yara-rules/whitelists/20-third-party.yar` — packages from the curated third-party volume, including plugins and themes.
 - `yara-rules/whitelists/99-custom.yar` — manually validated exceptions, including custom rules for image false positives.
 
-The whitelist layout has been refactored, but `generate-whitelist.sh` and `add-to-whitelist.sh` have not yet been updated to use it. Their current output and file destinations still follow the previous core/plugin/theme and custom-file layout; adapt generated entries to the appropriate new category manually until the scripts are updated.
+Rules from ZIPs in `./volumes/third-party` go to `20-third-party.yar`. Rules from the WordPress.org repository, including archives downloaded and stored in the cache by this script, go to `10-oficial-repository.yar`. The cache is reserved for these official downloads. Manually validated exceptions remain in `99-custom.yar`. At the end of a run, `last_updated` is refreshed once in each generated whitelist that received new rules; `--dry-run` does not change timestamps.
 
-This script reads the WordPress files in `/var/www/html`, extracts the plugin/theme metadata (`Plugin Name:`, `Theme Name:`, `Version:`), and resolves the matching package using a fallback chain before generating hash-based whitelist rules. The main file of a plugin is the PHP file in its root directory with a `Plugin Name:` header in its first 20 lines, and the theme metadata is read from `style.css`. Only the plugins and themes with at least one YARA match in the site are processed.
+The script reads plugin and theme metadata (`Plugin Name:`, `Theme Name:`, `Version:`) from the installed site and resolves matching packages using the fallback chain below. The main plugin file is the PHP file in its root directory with a `Plugin Name:` header in its first 20 lines; theme metadata is read from `style.css`. Only installed packages with YARA findings are resolved this way. Third-party ZIPs are cataloged separately whether or not they are installed.
 
-The script's WordPress-core version check still refers to the previous `whitelists/wordpress.yar` layout and will be updated as part of the planned script refactor.
+Before saving each block, the script validates the candidate YARA rules. It then rescans every file reported by the initial site scan. Any file that still matches is counted as unverified in the summary and makes the command exit non-zero; this is a review signal, not an automatic malware verdict.
 
-The resolution order is the same for the core, plugins and themes, where `<kind>` is `wordpress`, `plugins` or `themes`:
+For installed core, plugins and themes, references are resolved in this order:
 
 1. `/usr/local/share/src/third-party/<kind>`
 2. `/usr/share/cache/wordpress-security-audit/<kind>`
-3. `wget` from the official WordPress.org repository
+3. Download from the official WordPress.org repository and save to the cache
 
 Archives are looked up by name: `<slug>.<version>.zip` for plugins and themes (the same name used by WordPress.org, e.g. `elementor.4.3.5.zip`) and `wordpress-<version>.zip` for the core.
 
