@@ -26,7 +26,7 @@ include "whitelist.yar"
 
 global private rule IsPhp {
     strings:
-        $php = /<\?[^x]/
+        $php = /<\?([Pp][Hh][Pp]|\s)/
     condition:
         $php and filesize < 5MB
 }
