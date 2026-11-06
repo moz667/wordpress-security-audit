@@ -12,4 +12,4 @@ COPY yara-rules /usr/share/yara-rules
 
 VOLUME /var/www/html
 
-CMD [ "yara", "-r", "/usr/share/yara-rules/php.yar", "/var/www/html" ]
+CMD [ "wsa-scan.sh" ]

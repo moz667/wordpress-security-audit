@@ -48,7 +48,7 @@ Run YARA against the entire WordPress tree.
 Base command:
 
 ```bash
-docker compose run --rm -T wsa yara -r /usr/share/yara-rules/php.yar /var/www/html
+docker compose run --rm -T wsa
 ```
 
 Objective:
