@@ -1,13 +1,11 @@
-include "whitelists/wordpress.yar"
-include "whitelists/plugins.yar"
-include "whitelists/themes.yar"
-include "whitelists/custom.yar"
+include "whitelists/10-oficial-repository.yar"
+include "whitelists/20-third-party.yar"
+include "whitelists/99-custom.yar"
 
 private rule IsWhitelisted
 {
     condition:
-        IsWhitelistedWordpress or
-        IsWhitelistedPlugins or
-        IsWhitelistedThemes or
+        IsWhitelistedOficialRepository or
+        IsWhitelistedThirdParty or
         IsWhitelistedCustom
 }

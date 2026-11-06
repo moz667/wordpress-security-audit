@@ -76,11 +76,19 @@ docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh > whitelist-
 
 This is the recommended workflow for the project because the compose file mounts the custom rule directory in `/usr/share/yara-rules`, allowing the generated whitelist to be reused across scans without rewriting the image or the base ruleset.
 
-The generated rules are printed to stdout, grouped in `// [START] ...` / `// [END] ...` blocks, and are meant to be pasted between the matching markers of `yara-rules/whitelists/wordpress.yar`, `plugins.yar` and `themes.yar`. Progress messages are printed to stderr, so redirecting stdout gives a clean rules file. The `-T` flag is required for this: without it `docker compose run` allocates a TTY and stderr gets mixed into stdout.
+The generated rules are printed to stdout, grouped in `// [START] ...` / `// [END] ...` blocks. Progress messages are printed to stderr, so redirecting stdout gives a clean rules file. The `-T` flag is required for this: without it `docker compose run` allocates a TTY and stderr gets mixed into stdout.
+
+The whitelist rules are currently organized by source and confidence:
+
+- `yara-rules/whitelists/10-oficial-repository.yar` — files verified against the official WordPress repository.
+- `yara-rules/whitelists/20-third-party.yar` — third-party plugins and themes verified against locally available reference packages.
+- `yara-rules/whitelists/99-custom.yar` — manually validated exceptions, including custom rules for image false positives.
+
+The whitelist layout has been refactored, but `generate-whitelist.sh` and `add-to-whitelist.sh` have not yet been updated to use it. Their current output and file destinations still follow the previous core/plugin/theme and custom-file layout; adapt generated entries to the appropriate new category manually until the scripts are updated.
 
 This script reads the WordPress files in `/var/www/html`, extracts the plugin/theme metadata (`Plugin Name:`, `Theme Name:`, `Version:`), and resolves the matching package using a fallback chain before generating hash-based whitelist rules. The main file of a plugin is the PHP file in its root directory with a `Plugin Name:` header in its first 20 lines, and the theme metadata is read from `style.css`. Only the plugins and themes with at least one YARA match in the site are processed.
 
-The WordPress core is skipped when the installed version is the one already covered by `whitelists/wordpress.yar` (`LATEST_WP_VERSION` in the script).
+The script's WordPress-core version check still refers to the previous `whitelists/wordpress.yar` layout and will be updated as part of the planned script refactor.
 
 The resolution order is the same for the core, plugins and themes, where `<kind>` is `wordpress`, `plugins` or `themes`:
 

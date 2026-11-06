@@ -1,12 +1,12 @@
 import "hash"
 
-private rule IsWhitelistedWordpress : CMS
+private rule IsWhitelistedOficialRepository: Whitelist WLOficialRepository
 {
     meta:
-        generated = "2026-10-25T20:24:54.123456"
+        last_updated = "2026-11-06T05:56:00.000000"
 
     condition:
-        // [START] wordpress 7.1.3
+        // [START] wordpress core 7.1.3
         hash.sha256(0, filesize) == "fa58dcbc0a6854b876b35edc9060d9857e7cbb674355459088825ca0ff336122" or // wp-content/plugins/akismet/class.akismet.php
         hash.sha256(0, filesize) == "522bcf0d07be7e7e00114711db5c9ce2b4d59ac041c5ec36eaadd979d5fa7046" or // wp-includes/PHPMailer/SMTP.php
         hash.sha256(0, filesize) == "3fa163fdd315e122ec721a66cfffbb64863d479d4edbabfac8f1dc4bdda1f845" or // wp-includes/general-template.php
@@ -57,7 +57,7 @@ private rule IsWhitelistedWordpress : CMS
         hash.sha256(0, filesize) == "0d1d0e6e9c135452641b5a518ba41f6907e67ac668d27d5e38690f53e846527e" or // wp-admin/includes/upgrade.php
         hash.sha256(0, filesize) == "5ed2dc97277dd3a9be0caac0b6ac47509473b520579144265a623cfca4392a4b" or // wp-admin/includes/template.php
         hash.sha256(0, filesize) == "39f881d3c1957fc97111886079db76f1b0798b72d991d90682a4de1f17b270e1" or // wp-admin/includes/class-pclzip.php
-        // [END] wordpress 7.1.3
+        // [END] wordpress core 7.1.3
 
         // End rule
         false

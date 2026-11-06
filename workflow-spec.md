@@ -81,12 +81,13 @@ Exact command:
 docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh > /tmp/whitelist-output.txt
 ```
 
-The output is added to these files:
+Whitelist rules are now organized by source and confidence:
 
-- `yara-rules/whitelists/wordpress.yar`
-- `yara-rules/whitelists/plugins.yar`
-- `yara-rules/whitelists/themes.yar`
-- `yara-rules/whitelists/custom.yar`
+- `yara-rules/whitelists/10-oficial-repository.yar` — files verified against the official WordPress repository
+- `yara-rules/whitelists/20-third-party.yar` — third-party plugins and themes verified against locally available reference packages
+- `yara-rules/whitelists/99-custom.yar` — manually validated exceptions, including custom rules for image false positives
+
+The whitelist files have been refactored, but `generate-whitelist.sh` and `add-to-whitelist.sh` have not yet been updated to use them. The generator still produces core/plugin/theme-grouped output, and its previous file destinations and markers are no longer the current layout. Until the script refactor, generated entries must be reviewed and manually placed in the appropriate category.
 
 Source resolution:
 
@@ -100,14 +101,11 @@ This prevents legitimate plugin and theme files from being flagged as suspicious
 
 ### Phase 3: whitelist official and third-party packages
 
-The whitelist should include:
+Use the source-based rule groups:
 
-- WordPress core
-- official plugins
-- official themes
-- official language files
-- purchased or older packages present in `./volumes/third-party`
-- validated cache that has already been inspected
+- `10-oficial-repository.yar` for files verified against the official WordPress repository, including core, plugins, themes, or language packages
+- `20-third-party.yar` for purchased or older plugin/theme packages verified against reference copies in `./volumes/third-party` or validated cache
+- `99-custom.yar` for manually reviewed exceptions that do not belong in a package-based whitelist
 
 Key decision:
 - if the source is unknown, do not automatically accept it as clean
@@ -294,9 +292,11 @@ Objective:
 
 What it does exactly:
 - calculates the file's SHA256
-- inserts it into `custom.yar`
+- inserts it into the previous `custom.yar` file
 - prevents duplicates
 - helps mark false positives or files that have already been validated
+
+This script has not yet been updated for the new whitelist layout and currently targets a file that no longer exists. Its command examples below document the current interface, not a working integration with the refactored rule files.
 
 Run:
 
@@ -325,7 +325,9 @@ Recommended uses:
 - `Dockerfile` → contains the image with YARA, scripts, and rules
 - `yara-rules/php.yar` → primary detection rule
 - `yara-rules/whitelist.yar` → central whitelist logic
-- `yara-rules/whitelists/*.yar` → rules with hashes by type
+- `yara-rules/whitelists/10-oficial-repository.yar` → hashes verified against the official repository
+- `yara-rules/whitelists/20-third-party.yar` → hashes verified against third-party reference packages
+- `yara-rules/whitelists/99-custom.yar` → manually validated exceptions
 - `volumes/third-party` → local plugin/theme/language packages
 - `volumes/cache` → cache of validated downloads
 - `volumes/www` → WordPress site to audit
