@@ -1,4 +1,3 @@
-/* Add your own rules here */
 import "hash"
 
 private rule IsWhitelistedCustom : CUSTOM
