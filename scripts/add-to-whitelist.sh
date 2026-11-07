@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Adds the sha256 hash of the given file(s) to the custom YARA whitelist,
-# just before the "// [END] Custom whitelist rules" marker:
+# just before the "// End rule" marker:
 #
 #   hash.sha256(0, filesize) == "<sha256>" or // <path relative to $WWWROOT>
 #
@@ -12,9 +12,9 @@
 # ---------------------------------------------------------------------------
 
 WWWROOT="${WWWROOT:-/var/www/html}"
-CUSTOM_WHITELIST="${CUSTOM_WHITELIST:-/usr/share/yara-rules/whitelists/custom.yar}"
+CUSTOM_WHITELIST="${CUSTOM_WHITELIST:-/usr/share/yara-rules/whitelists/99-custom.yar}"
 
-END_MARKER="// [END] Custom whitelist rules"
+END_MARKER="// End rule"
 INDENT="        "
 
 # ---------------------------------------------------------------------------
