@@ -37,8 +37,10 @@ rule NonPrintableChars {
         Searching only for non-printable characters completely kills the perf,
         so we have to use atoms (https://gist.github.com/Neo23x0/e3d4e316d7441d9143c7)
         to get an acceptable speed.
+        Exclude the UTF-8 em dash (E2 80 94), which is common in legitimate text,
+        to avoid false positives while still detecting other non-printable bytes.
         */
-        $non_printables = /(function|return|base64_decode).{,256}[^\x09-\x0d\x20-\x7E]{3}/
+        $non_printables = /(function|return|base64_decode).{,256}([^\x09-\x0d\x20-\x7E\xe2][^\x09-\x0d\x20-\x7E]{2}|\xe2[^\x09-\x0d\x20-\x7E\x80][^\x09-\x0d\x20-\x7E]|\xe2\x80[^\x09-\x0d\x20-\x7E\x94])/
     condition:
         (any of them) and not IsWhitelisted
 }
