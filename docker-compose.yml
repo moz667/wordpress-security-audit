@@ -9,7 +9,7 @@ services:
       - ./volumes/cache:/usr/share/cache/wordpress-security-audit:rw
       - ./scripts/wsa-auto-add-to-whitelists.sh:/usr/local/bin/wsa-auto-add-to-whitelists.sh:ro
       - ./scripts/sanitize-yara-matched-images.sh:/usr/local/bin/sanitize-yara-matched-images.sh:ro
-      - ./scripts/add-to-whitelist.sh:/usr/local/bin/add-to-whitelist.sh:ro
+      - ./scripts/wsa-add-file-to-whitelist.sh:/usr/local/bin/wsa-add-file-to-whitelist.sh:ro
 
 volumes:
   yara-rules:

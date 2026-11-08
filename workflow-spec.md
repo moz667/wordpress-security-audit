@@ -291,10 +291,10 @@ Warning:
 
 ---
 
-### 3) `add-to-whitelist.sh`
+### 3) `wsa-add-file-to-whitelist.sh`
 
 Path:
-- `scripts/add-to-whitelist.sh`
+- `scripts/wsa-add-file-to-whitelist.sh`
 
 Objective:
 - add the hash of a legitimate file to the custom whitelist
@@ -309,13 +309,13 @@ What it does exactly:
 Run:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/add-to-whitelist.sh /var/www/html/wp-content/plugins/example/example.php
+docker compose run --rm -T wsa /usr/local/bin/wsa-add-file-to-whitelist.sh /var/www/html/wp-content/plugins/example/example.php
 ```
 
 Or multiple files together:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/add-to-whitelist.sh \
+docker compose run --rm -T wsa /usr/local/bin/wsa-add-file-to-whitelist.sh \
   /var/www/html/wp-content/plugins/example/example.php \
   /var/www/html/wp-content/themes/demo/style.css
 ```

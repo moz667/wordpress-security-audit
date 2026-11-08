@@ -5,7 +5,7 @@
 #
 #   hash.sha256(0, filesize) == "<sha256>" or // <path relative to $WWWROOT>
 #
-# Usage: add-to-whitelist.sh <file> [<file> ...]
+# Usage: wsa-add-file-to-whitelist.sh <file> [<file> ...]
 
 # ---------------------------------------------------------------------------
 # Configuration
