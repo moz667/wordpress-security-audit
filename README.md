@@ -56,6 +56,16 @@ The `docker-compose.yml` file does exactly this for the project workflow, mounti
 
 The image also exposes the helper scripts under `/usr/local/bin/`, so they can be executed directly inside the container as needed.
 
+The default `wsa` command runs `wsa-scan.sh`. To run its optional preparation steps before the final YARA scan, use:
+
+```bash
+docker compose run --rm -T wsa wsa-scan.sh --auto-add-to-whitelist
+docker compose run --rm -T wsa wsa-scan.sh --sanitize-images
+docker compose run --rm -T wsa wsa-scan.sh --all
+```
+
+`--all` runs automatic official and third-party whitelist generation, then image sanitization, followed by the final scan. Work on an isolated copy when enabling image sanitization.
+
 For a more beginner-friendly explanation of the security concepts behind YARA, false positives, non-printable characters, and whitelist-based filtering, see [security-for-dummies.md](security-for-dummies.md).
 
 ### Script 1: `wsa-auto-add-to-whitelists.sh`

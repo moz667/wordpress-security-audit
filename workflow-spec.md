@@ -51,6 +51,16 @@ Base command:
 docker compose run --rm -T wsa
 ```
 
+The scanner accepts optional preparation steps before the final scan:
+
+```bash
+docker compose run --rm -T wsa wsa-scan.sh --auto-add-to-whitelist
+docker compose run --rm -T wsa wsa-scan.sh --sanitize-images
+docker compose run --rm -T wsa wsa-scan.sh --all
+```
+
+`--auto-add-to-whitelist` runs `wsa-auto-add-to-whitelists.sh`, `--sanitize-images` runs `wsa-sanitize-images.sh`, and `--all` runs both in that order. The final YARA scan runs after the selected steps. If a preparation step fails, the scan is aborted. `-a`, `-i`, and `-A` are the corresponding short options; `--help` displays usage.
+
 Objective:
 - identify genuine candidates
 - reduce the set of files to review
