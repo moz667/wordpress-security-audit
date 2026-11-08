@@ -58,7 +58,7 @@ The image also exposes the helper scripts under `/usr/local/bin/`, so they can b
 
 For a more beginner-friendly explanation of the security concepts behind YARA, false positives, non-printable characters, and whitelist-based filtering, see [security-for-dummies.md](security-for-dummies.md).
 
-### Script 1: `generate-whitelist.sh`
+### Script 1: `wsa-auto-add-to-whitelists.sh`
 
 Purpose:
 - Detect the WordPress version installed in `/var/www/html`
@@ -72,13 +72,13 @@ Purpose:
 Run the generator to persist each validated rule block as it is generated:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh
+docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh
 ```
 
 To preview changes without writing them:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh --dry-run
+docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh --dry-run
 ```
 
 Progress and a concise summary are printed to stderr. Hash rules are stored in the mounted whitelist files rather than printed to stdout. If a package cannot be resolved, processing continues and already validated rules remain saved. After the summary, the script lists unavailable resources with their type, slug/version, and download URL. Unresolved files or package errors cause a non-zero exit status.

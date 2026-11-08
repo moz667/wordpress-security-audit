@@ -11,6 +11,7 @@ The goal is not to turn this project into a cybersecurity course, but to help a 
   - [1) Why a WordPress site can be infected even when it looks normal](#1-why-a-wordpress-site-can-be-infected-even-when-it-looks-normal)
   - [2) Why false positives are normal in malware analysis](#2-why-false-positives-are-normal-in-malware-analysis)
   - [3) What are non-printable characters and why do they matter?](#3-what-are-non-printable-characters-and-why-do-they-matter)
+    - [Practical rule: context matters more than the byte itself](#practical-rule-context-matters-more-than-the-byte-itself)
   - [4) Real-world examples of dangerous non-printable characters](#4-real-world-examples-of-dangerous-non-printable-characters)
     - [Example 1: header injection](#example-1-header-injection)
     - [Example 2: NUL byte in a string](#example-2-nul-byte-in-a-string)
@@ -491,7 +492,7 @@ If the answer to these questions is “I do not know”, the safest course is to
 
 ### What to do when the original package is not available
 
-For plugins and themes from WordPress.org, the process is usually straightforward: fetch the official package, hash it, and compare the installed files against the clean source. That is the standard workflow used by this project and by the script `scripts/generate-whitelist.sh`.
+For plugins and themes from WordPress.org, the process is usually straightforward: fetch the official package, hash it, and compare the installed files against the clean source. That is the standard workflow used by this project and by the script `scripts/wsa-auto-add-to-whitelists.sh`.
 
 For paid, old, or third-party products, the situation is different. Sometimes the original code is simply no longer available because:
 

@@ -65,7 +65,7 @@ Important:
 
 The main script is:
 
-- `scripts/generate-whitelist.sh`
+- `scripts/wsa-auto-add-to-whitelists.sh`
 
 What it does:
 - scans the site and records files that trigger YARA
@@ -79,13 +79,13 @@ What it does:
 Default command (generates and persists rules incrementally):
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh
+docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh
 ```
 
 Preview command:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh --dry-run
+docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh --dry-run
 ```
 
 Whitelist rules are now organized by source and confidence:
@@ -228,10 +228,10 @@ Next decision:
 
 ## Script by script
 
-### 1) `generate-whitelist.sh`
+### 1) `wsa-auto-add-to-whitelists.sh`
 
 Path:
-- `scripts/generate-whitelist.sh`
+- `scripts/wsa-auto-add-to-whitelists.sh`
 
 Objective:
 - reduce noise using hashes from official packages
@@ -252,7 +252,7 @@ What it does exactly:
 Run:
 
 ```bash
-docker compose run --rm -T wsa /usr/local/bin/generate-whitelist.sh > /tmp/whitelist-output.txt
+docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh > /tmp/whitelist-output.txt
 ```
 
 Important rule:
@@ -349,7 +349,7 @@ The recommended sequence is:
 ```text
 snapshot/isolated copy
   -> baseline YARA scan
-  -> generate-whitelist.sh
+  -> wsa-auto-add-to-whitelists.sh
   -> official + third-party whitelist
   -> quarantine suspicious files
   -> integrity validation
