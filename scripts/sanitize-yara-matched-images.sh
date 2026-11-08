@@ -33,9 +33,14 @@ sanitized=$(mktemp) || {
 sorted_matches="$matches.sorted"
 trap 'rm -f "$matches" "$sanitized" "$sorted_matches"' EXIT HUP INT TERM
 
-if ! yara -r "$YARA_RULES" "$wwwroot" > "$matches"; then
-    echo "Error: YARA scan failed for $wwwroot" >&2
-    exit 1
+if yara -r "$YARA_RULES" "$wwwroot" > "$matches"; then
+    :
+else
+    yara_status=$?
+    if [ "$yara_status" -ne 1 ]; then
+        echo "Error: YARA scan failed for $wwwroot" >&2
+        exit 1
+    fi
 fi
 
 awk '
@@ -94,6 +99,20 @@ while IFS= read -r image || [ -n "$image" ]; do
         continue
     fi
 
+    if yara "$YARA_RULES" "$temp_final" >/dev/null 2>&1; then
+        add_to_whitelist=1
+    else
+        yara_status=$?
+        if [ "$yara_status" -eq 1 ]; then
+            add_to_whitelist=0
+        else
+            echo "Error: YARA verification failed for sanitized image $relpath" >&2
+            rm -rf "$temp_dir"
+            status=1
+            continue
+        fi
+    fi
+
     timestamp=$(date '+%Y%m%dT%H%M%S.%6N') || {
         echo "Error: could not determine the current timestamp" >&2
         rm -rf "$temp_dir"
@@ -131,12 +150,16 @@ while IFS= read -r image || [ -n "$image" ]; do
         continue
     fi
     rm -rf "$temp_dir"
-    printf '%s\n' "$image_path" >> "$sanitized" || {
-        echo "Error: could not record sanitized file $relpath" >&2
-        status=1
-        continue
-    }
-    echo "Sanitized: $relpath (original saved to $quarantine_path)" >&2
+    if [ "$add_to_whitelist" -eq 1 ]; then
+        printf '%s\n' "$image_path" >> "$sanitized" || {
+            echo "Error: could not record sanitized file $relpath" >&2
+            status=1
+            continue
+        }
+        echo "Sanitized: $relpath (still matches YARA; original saved to $quarantine_path)" >&2
+    else
+        echo "Sanitized: $relpath (no longer matches YARA; original saved to $quarantine_path)" >&2
+    fi
 done < "$matches"
 
 if [ -s "$sanitized" ]; then
