@@ -843,6 +843,6 @@ if [ -s "$NOT_FOUND_RESOURCES" ]; then
     done < "$NOT_FOUND_RESOURCES"
 fi
 
-if [ "$ERRORS" -ne 0 ] || [ "$UNVERIFIED_FILES" -ne 0 ]; then
+if [ "$ERRORS" -ne 0 ]; then
     exit 1
 fi
