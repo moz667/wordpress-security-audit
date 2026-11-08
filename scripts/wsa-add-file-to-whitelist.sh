@@ -22,7 +22,7 @@ INDENT="        "
 # ---------------------------------------------------------------------------
 
 if [ "$#" -eq 0 ]; then
-    echo "Usage: $(basename "$0") <file> [<file> ...]" >&2
+    echo "Usage: $(basename "$0") <file> [<file> ...] | --files-from <list>" >&2
     exit 1
 fi
 
@@ -38,8 +38,30 @@ fi
 
 wwwroot=$(realpath "$WWWROOT")
 status=0
+files=$(mktemp) || exit 1
+rules=$(mktemp) || exit 1
+temporary=$(mktemp "$(dirname "$CUSTOM_WHITELIST")/.whitelist.XXXXXX") || {
+    rm -f "$files" "$rules"
+    exit 1
+}
+trap 'rm -f "$files" "$rules" "$temporary"' EXIT HUP INT TERM
 
-for file in "$@"; do
+if [ "$1" = "--files-from" ]; then
+    if [ "$#" -ne 2 ] || [ ! -r "$2" ] || ! cat < "$2" > "$files"; then
+        echo "Error: expected a readable list after --files-from" >&2
+        exit 1
+    fi
+else
+    for file in "$@"; do
+        printf '%s\n' "$file" >> "$files" || {
+            echo "Error: could not stage file list" >&2
+            exit 1
+        }
+    done
+fi
+
+while IFS= read -r file || [ -n "$file" ]; do
+    [ -n "$file" ] || continue
     if [ ! -f "$file" ]; then
         echo "Error: not a regular file: $file" >&2
         status=1
@@ -63,21 +85,32 @@ for file in "$@"; do
         continue
     fi
 
-    rule="${INDENT}hash.sha256(0, filesize) == \"$hash\" or  // $relpath"
-    timestamp=$(date '+%Y-%m-%dT%H:%M:%S.%6N') || {
-        echo "Error: could not determine the current timestamp" >&2
+    if grep -qF "\"$hash\"" "$rules"; then
+        continue
+    fi
+
+    printf '%s\n' "${INDENT}hash.sha256(0, filesize) == \"$hash\" or  // $relpath" >> "$rules" || {
+        echo "Error: could not stage hash for $relpath" >&2
         status=1
         continue
     }
+    echo "Added: $relpath ($hash)" >&2
+done < "$files"
 
-    tmp=$(mktemp) || exit 1
-    if ! RULE="$rule" MARKER="$END_MARKER" TIMESTAMP="$timestamp" awk '
+if [ -s "$rules" ]; then
+    timestamp=$(date '+%Y-%m-%dT%H:%M:%S.%6N') || {
+        echo "Error: could not determine the current timestamp" >&2
+        exit 1
+    }
+    if ! RULES_FILE="$rules" MARKER="$END_MARKER" TIMESTAMP="$timestamp" awk '
         /^[[:space:]]*last_updated[[:space:]]*=/ {
             timestamp_count++
             sub(/"[^"]*"/, "\"" ENVIRON["TIMESTAMP"] "\"")
         }
         !done && index($0, ENVIRON["MARKER"]) {
-            print ENVIRON["RULE"]
+            while ((getline rule < ENVIRON["RULES_FILE"]) > 0)
+                print rule
+            close(ENVIRON["RULES_FILE"])
             done = 1
         }
         { print }
@@ -85,21 +118,15 @@ for file in "$@"; do
             if (timestamp_count != 1 || !done)
                 exit 1
         }
-    ' "$CUSTOM_WHITELIST" > "$tmp"; then
+    ' "$CUSTOM_WHITELIST" > "$temporary"; then
         echo "Error: could not stage hash or last_updated in $CUSTOM_WHITELIST" >&2
-        rm -f "$tmp"
-        status=1
-        continue
+        exit 1
     fi
-    if ! cat "$tmp" > "$CUSTOM_WHITELIST"; then
+    if ! chmod "$(stat -c '%a' "$CUSTOM_WHITELIST")" "$temporary" ||
+        ! mv "$temporary" "$CUSTOM_WHITELIST"; then
         echo "Error: could not update $CUSTOM_WHITELIST" >&2
-        rm -f "$tmp"
-        status=1
-        continue
+        exit 1
     fi
-    rm -f "$tmp"
-
-    echo "Added: $relpath ($hash)" >&2
-done
+fi
 
 exit $status
