@@ -120,12 +120,13 @@ How to use it:
 ```bash
 docker run --rm \
   -v "$PWD/volumes/www:/var/www/html:rw" \
-  -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:ro" \
+  -v "$PWD/volumes/quarantine:/var/www/quarantine:rw" \
+  -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:rw" \
   wordpress-security-audit \
   /usr/local/bin/sanitize-yara-matched-images.sh
 ```
 
-This is the sanitization step for suspicious image files found in the site tree. It must be executed with write access to the target `wwwroot` because it modifies the files in place. The rule volume is still important here because the sanitization step is meant to complement a curated YARA rule set and a whitelist-based workflow rather than relying on a single broad pattern.
+Before replacing an image, the script saves its original under `volumes/quarantine`, preserving the path relative to the WordPress root. It then adds hashes for sanitized images to `99-custom.yar` and updates `last_updated` once if at least one new rule was added. The site, quarantine, and rule volumes must be writable.
 
 > Warning: always work on a backup or an isolated copy of the site before applying sanitization to production files.
 

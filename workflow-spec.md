@@ -140,7 +140,8 @@ Exact command:
 ```bash
 docker run --rm \
   -v "$PWD/volumes/www:/var/www/html:rw" \
-  -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:ro" \
+  -v "$PWD/volumes/quarantine:/var/www/quarantine:rw" \
+  -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:rw" \
   wordpress-security-audit \
   /usr/local/bin/sanitize-yara-matched-images.sh
 ```
@@ -148,8 +149,9 @@ docker run --rm \
 What it does:
 - locates images flagged by YARA
 - filters for actual image files only
+- saves each original image in quarantine before changing it
 - rewrites the image to break the malicious structure
-- generates hashes for the whitelist
+- adds sanitized hashes to `99-custom.yar` and updates `last_updated` once if new rules were added
 
 Important:
 - this operation modifies actual files
@@ -280,7 +282,8 @@ Run:
 ```bash
 docker run --rm \
   -v "$PWD/volumes/www:/var/www/html:rw" \
-  -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:ro" \
+  -v "$PWD/volumes/quarantine:/var/www/quarantine:rw" \
+  -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:rw" \
   wordpress-security-audit \
   /usr/local/bin/sanitize-yara-matched-images.sh
 ```
