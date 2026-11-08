@@ -112,8 +112,9 @@ In the compose setup, the local `volumes/third-party` directory is mounted read-
 Purpose:
 - Scan the WordPress tree for files flagged by the YARA rules
 - Filter only real image files using `identify`
-- Rewrite the image binary in-place with a safe transformation (`-flip -flip` / re-encode) to break malicious payload alignment without changing the visible image too much
-- Output the sanitized image hashes as YARA whitelist entries
+- Save each original image to quarantine before replacing it
+- Re-encode matching images with ImageMagick, then check the sanitized result against YARA
+- Add a sanitized image hash to the custom whitelist only if the result still matches YARA
 
 How to use it:
 
@@ -126,11 +127,11 @@ docker run --rm \
   /usr/local/bin/wsa-sanitize-images.sh
 ```
 
-Before replacing an image, the script saves its original under `volumes/quarantine`, preserving the path relative to the WordPress root. It then adds hashes for sanitized images to `99-custom.yar` and updates `last_updated` once if at least one new rule was added. The site, quarantine, and rule volumes must be writable.
+Before replacing an image, the script saves its original under `volumes/quarantine`, preserving the path relative to the WordPress root. Images that no longer match YARA after sanitization are not added to the whitelist. For images that still match, the script adds their sanitized hashes to `99-custom.yar` and updates `last_updated` once if at least one new rule was added. The site, quarantine, and rule volumes must be writable.
 
 > Warning: always work on a backup or an isolated copy of the site before applying sanitization to production files.
 
-> Note: The problem of detecting injected code within media files is highly complex. Therefore, to solve this issue, we will choose to sanitize and reconstruct the image while strictly preserving its original visual appearance. To achieve this, we will apply a double vertical flip operation (`-flip -flip`). This technique forces the graphics engine to completely rewrite the underlying binary stream and compression structures, breaking the malware's alignment without altering the dimensions or color indexing of the file.
+> Note: Sanitization re-encodes images and strips metadata. Review the resulting images for visual or format changes; this process is not a guarantee that an image is safe.
 
 ---
 

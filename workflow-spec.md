@@ -150,11 +150,13 @@ What it does:
 - locates images flagged by YARA
 - filters for actual image files only
 - saves each original image in quarantine before changing it
-- rewrites the image to break the malicious structure
-- adds sanitized hashes to `99-custom.yar` and updates `last_updated` once if new rules were added
+- re-encodes each image and checks the sanitized result against YARA
+- adds the sanitized hash to `99-custom.yar` only if the result still matches YARA
+- updates `last_updated` once if at least one new rule was added
 
 Important:
-- this operation modifies actual files
+- this operation modifies images after saving their originals in quarantine
+- images that stop matching YARA are not added to the whitelist
 - it must only be performed on an isolated copy
 
 ---
@@ -268,14 +270,16 @@ Path:
 - `scripts/wsa-sanitize-images.sh`
 
 Objective:
-- clean suspicious images containing detected payloads or strings
-- break the malicious structure without destroying the visual appearance
+- re-encode image files flagged by YARA while preserving the original in quarantine
+- add sanitized image hashes to the whitelist only when the images still match YARA
 
 What it does exactly:
 - runs YARA against the tree
 - selects only files that are actual images
-- rewrites the image in place to break the injection
-- generates the resulting hashes for the whitelist
+- saves each original image in quarantine, then re-encodes and replaces it
+- checks each sanitized image against YARA
+- adds the sanitized hash to `99-custom.yar` only if it still matches YARA
+- updates `last_updated` once if new whitelist rules were added
 
 Run:
 
