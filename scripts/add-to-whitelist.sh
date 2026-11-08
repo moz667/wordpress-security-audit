@@ -64,12 +64,39 @@ for file in "$@"; do
     fi
 
     rule="${INDENT}hash.sha256(0, filesize) == \"$hash\" or  // $relpath"
+    timestamp=$(date '+%Y-%m-%dT%H:%M:%S.%6N') || {
+        echo "Error: could not determine the current timestamp" >&2
+        status=1
+        continue
+    }
 
     tmp=$(mktemp) || exit 1
-    RULE="$rule" MARKER="$END_MARKER" awk '
-        !done && index($0, ENVIRON["MARKER"]) { print ENVIRON["RULE"]; done = 1 }
+    if ! RULE="$rule" MARKER="$END_MARKER" TIMESTAMP="$timestamp" awk '
+        /^[[:space:]]*last_updated[[:space:]]*=/ {
+            timestamp_count++
+            sub(/"[^"]*"/, "\"" ENVIRON["TIMESTAMP"] "\"")
+        }
+        !done && index($0, ENVIRON["MARKER"]) {
+            print ENVIRON["RULE"]
+            done = 1
+        }
         { print }
-    ' "$CUSTOM_WHITELIST" > "$tmp" && cat "$tmp" > "$CUSTOM_WHITELIST"
+        END {
+            if (timestamp_count != 1 || !done)
+                exit 1
+        }
+    ' "$CUSTOM_WHITELIST" > "$tmp"; then
+        echo "Error: could not stage hash or last_updated in $CUSTOM_WHITELIST" >&2
+        rm -f "$tmp"
+        status=1
+        continue
+    fi
+    if ! cat "$tmp" > "$CUSTOM_WHITELIST"; then
+        echo "Error: could not update $CUSTOM_WHITELIST" >&2
+        rm -f "$tmp"
+        status=1
+        continue
+    fi
     rm -f "$tmp"
 
     echo "Added: $relpath ($hash)" >&2

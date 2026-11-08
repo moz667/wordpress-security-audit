@@ -301,11 +301,10 @@ Objective:
 
 What it does exactly:
 - calculates the file's SHA256
-- inserts it into the previous `custom.yar` file
+- inserts it into `99-custom.yar`
 - prevents duplicates
+- refreshes `last_updated` when a new hash is added
 - helps mark false positives or files that have already been validated
-
-This script has not yet been updated for the new whitelist layout and currently targets a file that no longer exists. Its command examples below document the current interface, not a working integration with the refactored rule files.
 
 Run:
 
