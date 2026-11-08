@@ -107,7 +107,7 @@ This means that vendored or manually supplied third-party archives take preceden
 
 In the compose setup, the local `volumes/third-party` directory is mounted read-only at `/usr/local/share/src/third-party`, and the `volumes/cache` directory is mounted read-write at `/usr/share/cache/wordpress-security-audit` so the script can reuse validated archives across runs.
 
-### Script 2: `sanitize-yara-matched-images.sh`
+### Script 2: `wsa-sanitize-images.sh`
 
 Purpose:
 - Scan the WordPress tree for files flagged by the YARA rules
@@ -123,7 +123,7 @@ docker run --rm \
   -v "$PWD/volumes/quarantine:/var/www/quarantine:rw" \
   -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:rw" \
   wordpress-security-audit \
-  /usr/local/bin/sanitize-yara-matched-images.sh
+  /usr/local/bin/wsa-sanitize-images.sh
 ```
 
 Before replacing an image, the script saves its original under `volumes/quarantine`, preserving the path relative to the WordPress root. It then adds hashes for sanitized images to `99-custom.yar` and updates `last_updated` once if at least one new rule was added. The site, quarantine, and rule volumes must be writable.

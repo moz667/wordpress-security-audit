@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # TODO: Add language-package handling to the source-appropriate whitelist and
-# custom image rules from sanitize-yara-matched-images.sh to 99-custom.yar.
+# custom image rules from wsa-sanitize-images.sh to 99-custom.yar.
 
 #
 # Generate hash-based whitelist rules from trusted package archives.

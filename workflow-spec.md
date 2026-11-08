@@ -133,7 +133,7 @@ Examples:
 - files added to execution paths or automatically loaded locations
 
 Helper script:
-- `scripts/sanitize-yara-matched-images.sh`
+- `scripts/wsa-sanitize-images.sh`
 
 Exact command:
 
@@ -143,7 +143,7 @@ docker run --rm \
   -v "$PWD/volumes/quarantine:/var/www/quarantine:rw" \
   -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:rw" \
   wordpress-security-audit \
-  /usr/local/bin/sanitize-yara-matched-images.sh
+  /usr/local/bin/wsa-sanitize-images.sh
 ```
 
 What it does:
@@ -262,10 +262,10 @@ Important rule:
 
 ---
 
-### 2) `sanitize-yara-matched-images.sh`
+### 2) `wsa-sanitize-images.sh`
 
 Path:
-- `scripts/sanitize-yara-matched-images.sh`
+- `scripts/wsa-sanitize-images.sh`
 
 Objective:
 - clean suspicious images containing detected payloads or strings
@@ -285,7 +285,7 @@ docker run --rm \
   -v "$PWD/volumes/quarantine:/var/www/quarantine:rw" \
   -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:rw" \
   wordpress-security-audit \
-  /usr/local/bin/sanitize-yara-matched-images.sh
+  /usr/local/bin/wsa-sanitize-images.sh
 ```
 
 Warning:
@@ -356,7 +356,7 @@ snapshot/isolated copy
   -> official + third-party whitelist
   -> quarantine suspicious files
   -> integrity validation
-  -> sanitize-yara-matched-images.sh if applicable
+  -> wsa-sanitize-images.sh if applicable
   -> final verification YARA scan
   -> decision: restore / isolate / whitelist / review manually
 ```
