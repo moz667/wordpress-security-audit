@@ -154,7 +154,7 @@ To review each matched file and its matched strings and offsets, run the script 
 docker compose run --rm wsa /usr/local/bin/wsa-process-matches.sh
 ```
 
-For each file, choose `c` to continue, `a` to add its hash to the custom whitelist, `m` to move it to quarantine, or `q` to quit. Whitelist and quarantine actions change files or rules, so only use them after validating the finding and work on an isolated copy of the site. The quarantine directory preserves each file's path relative to the WordPress root.
+For each file, choose `c` to continue, `a` to add its hash to the custom whitelist, `v` to rescan a PHP-tokenized copy with comments replaced by whitespace and whitelist the original only if no YARA matches remain, `m` to move it to quarantine, or `q` to quit. The comment check does not execute the PHP file or modify it. Whitelist and quarantine actions change rules or files, so only use them after validating the finding and work on an isolated copy of the site. The quarantine directory preserves each file's path relative to the WordPress root.
 
 ---
 

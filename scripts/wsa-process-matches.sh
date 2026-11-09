@@ -4,6 +4,7 @@ WWWROOT="${WWWROOT:-/var/www/html}"
 QUARANTINE_ROOT="${QUARANTINE_ROOT:-/var/www/quarantine}"
 YARA_RULES="${YARA_RULES:-/usr/share/yara-rules/php.yar}"
 WHITELIST_HELPER="${WHITELIST_HELPER:-/usr/local/bin/wsa-add-file-to-whitelist.sh}"
+COMMENT_WHITELIST_HELPER="${COMMENT_WHITELIST_HELPER:-/usr/local/bin/wsa-whitelist-comment-only.sh}"
 
 usage() {
     cat <<EOF
@@ -13,11 +14,12 @@ Interactively review files matched by YARA.
 For each matching file, show matching strings and offsets with YARA -s, then:
   c  Continue to the next file
   a  Add the file to the custom whitelist
+  v  Verify after removing PHP comments; whitelist original if no match remains
   m  Move the file to quarantine
   q  Quit
 
 Configuration is available through WWWROOT, YARA_RULES, QUARANTINE_ROOT,
-and WHITELIST_HELPER environment variables.
+WHITELIST_HELPER, and COMMENT_WHITELIST_HELPER environment variables.
 EOF
 }
 
@@ -78,12 +80,13 @@ trap 'rm -f "$matches" "$raw_files" "$files" "$detailed_matches"' EXIT HUP INT T
 
 yara -r "$YARA_RULES" "$wwwroot" > "$matches"
 yara_status=$?
-if [ "$yara_status" -eq 1 ]; then
-    echo "No YARA matches found in $wwwroot."
-    exit 0
-elif [ "$yara_status" -ne 0 ]; then
+if [ "$yara_status" -ne 0 ]; then
     echo "Error: YARA scan failed for $wwwroot (exit status $yara_status)" >&2
     exit "$yara_status"
+fi
+if [ ! -s "$matches" ]; then
+    echo "No YARA matches found in $wwwroot."
+    exit 0
 fi
 
 if ! awk '
@@ -128,12 +131,13 @@ while IFS= read -r file <&3 || [ -n "$file" ]; do
     printf '\n=== %s ===\n' "$relpath"
     yara -s "$YARA_RULES" "$file_path" > "$detailed_matches"
     yara_status=$?
-    if [ "$yara_status" -eq 1 ]; then
-        echo "The file no longer matches YARA; skipping it." >&2
-        continue
-    elif [ "$yara_status" -ne 0 ]; then
+    if [ "$yara_status" -ne 0 ]; then
         echo "Error: detailed YARA scan failed for $file_path (exit status $yara_status)" >&2
         status=1
+        continue
+    fi
+    if [ ! -s "$detailed_matches" ]; then
+        echo "The file no longer matches YARA; skipping it." >&2
         continue
     fi
     if ! awk '
@@ -148,7 +152,7 @@ while IFS= read -r file <&3 || [ -n "$file" ]; do
     fi
 
     while :; do
-        printf '\nAction [c]ontinue, [a]dd to whitelist, [m]ove to quarantine, [q]uit: '
+        printf '\nAction [c]ontinue, [a]dd to whitelist, [v]erify comments, [m]ove to quarantine, [q]uit: '
         if ! IFS= read -r choice; then
             echo >&2
             echo "Error: could not read an action from standard input" >&2
@@ -167,6 +171,23 @@ while IFS= read -r file <&3 || [ -n "$file" ]; do
                     echo "Added to whitelist: $relpath"
                 else
                     echo "Error: could not add $relpath to the whitelist" >&2
+                    status=1
+                fi
+                break
+                ;;
+            v|V)
+                if [ ! -x "$COMMENT_WHITELIST_HELPER" ]; then
+                    echo "Error: comment-only whitelist helper is not executable: $COMMENT_WHITELIST_HELPER" >&2
+                    status=1
+                elif "$COMMENT_WHITELIST_HELPER" "$file_path"; then
+                    :
+                else
+                    comment_status=$?
+                    if [ "$comment_status" -eq 3 ]; then
+                        echo "File was not whitelisted; choose another action for $relpath."
+                        continue
+                    fi
+                    echo "Error: comment-only verification failed for $relpath (exit status $comment_status)" >&2
                     status=1
                 fi
                 break
@@ -238,7 +259,7 @@ while IFS= read -r file <&3 || [ -n "$file" ]; do
                 exit "$status"
                 ;;
             *)
-                echo "Choose c, a, m, or q."
+                echo "Choose c, a, v, m, or q."
                 ;;
         esac
     done

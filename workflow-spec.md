@@ -352,6 +352,7 @@ Objective:
 - review each distinct file reported by YARA
 - show matching strings and offsets by running YARA with `-s`
 - explicitly choose whether to continue, whitelist, quarantine, or quit
+- optionally verify whether matches are confined to PHP comments before whitelisting
 
 Run interactively:
 
@@ -362,10 +363,11 @@ docker compose run --rm wsa /usr/local/bin/wsa-process-matches.sh
 Actions:
 - `c` continues to the next file
 - `a` calls `wsa-add-file-to-whitelist.sh` for the selected file
+- `v` tokenizes a temporary copy, replaces PHP comments with whitespace, rescans that copy, and adds the original file's hash to the custom whitelist only if no matches remain
 - `m` moves the selected file to quarantine, preserving its relative path
 - `q` exits the review
 
-The quarantine directory must be outside the WordPress root. Review and validate each finding before whitelisting or moving it, and run this workflow on an isolated copy or snapshot.
+The comment-only check uses PHP's tokenizer and does not execute or modify the site file. The quarantine directory must be outside the WordPress root. Review and validate each finding before whitelisting or moving it, and run this workflow on an isolated copy or snapshot.
 
 ---
 
