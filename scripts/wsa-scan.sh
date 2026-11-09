@@ -8,6 +8,9 @@ SANITIZE_IMAGES_SCRIPT="${SANITIZE_IMAGES_SCRIPT:-/usr/local/bin/wsa-sanitize-im
 AUTO_ADD=0
 SANITIZE_IMAGES=0
 
+VERBOSE=0
+SCAN_EXTRA_ARGS=""
+
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTION]
@@ -16,6 +19,7 @@ Run the YARA scan, optionally preparing whitelists first:
   -a, --auto-add-to-whitelist  Generate official and third-party whitelist rules
   -i, --sanitize-images        Sanitize YARA-matched images
   -A, --all                    Run both preparation steps before scanning
+  -v, --verbose                Verbose output
   -h, --help                   Show this help
 EOF
 }
@@ -31,6 +35,10 @@ while [ "$#" -gt 0 ]; do
         -A|--all)
             AUTO_ADD=1
             SANITIZE_IMAGES=1
+            ;;
+        -v|--verbose)
+            VERBOSE=1
+            SCAN_EXTRA_ARGS="-s"
             ;;
         -h|--help)
             usage
@@ -73,4 +81,20 @@ if [ "$SANITIZE_IMAGES" -eq 1 ]; then
 fi
 
 echo "- Running scan..." >&2
-yara -r "$YARA_RULES" "$WWWROOT"
+SCAN_OUTPUT=$(mktemp) || {
+    echo "Error: unable to create temporary file for scan output" >&2
+    exit 1
+}
+trap 'rm -f "$SCAN_OUTPUT"' EXIT HUP INT TERM
+
+if yara $SCAN_EXTRA_ARGS -r "$YARA_RULES" "$WWWROOT" > "$SCAN_OUTPUT"; then
+    cat "$SCAN_OUTPUT"
+    if [ -s "$SCAN_OUTPUT" ]; then
+        exit 0
+    fi
+    echo "Congrats! The coast is clear (no malware matches found)."
+else
+    scan_status=$?
+    cat "$SCAN_OUTPUT"
+    exit "$scan_status"
+fi
