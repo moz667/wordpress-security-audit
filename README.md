@@ -62,9 +62,12 @@ The default `wsa` command runs `wsa-scan.sh`. To run its optional preparation st
 docker compose run --rm -T wsa wsa-scan.sh --auto-add-to-whitelist
 docker compose run --rm -T wsa wsa-scan.sh --sanitize-images
 docker compose run --rm -T wsa wsa-scan.sh --all
+docker compose run --rm -T wsa wsa-scan.sh --verbose
 ```
 
 `--all` runs automatic official and third-party whitelist generation, then image sanitization, followed by the final scan. Work on an isolated copy when enabling image sanitization.
+
+Use `--verbose` (or `-v`) to show the matched strings and their offsets in addition to the matching rule and file.
 
 For a more beginner-friendly explanation of the security concepts behind YARA, false positives, non-printable characters, and whitelist-based filtering, see [security-for-dummies.md](security-for-dummies.md).
 

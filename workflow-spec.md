@@ -57,9 +57,10 @@ The scanner accepts optional preparation steps before the final scan:
 docker compose run --rm -T wsa wsa-scan.sh --auto-add-to-whitelist
 docker compose run --rm -T wsa wsa-scan.sh --sanitize-images
 docker compose run --rm -T wsa wsa-scan.sh --all
+docker compose run --rm -T wsa wsa-scan.sh --verbose
 ```
 
-`--auto-add-to-whitelist` runs `wsa-auto-add-to-whitelists.sh`, `--sanitize-images` runs `wsa-sanitize-images.sh`, and `--all` runs both in that order. The final YARA scan runs after the selected steps. If a preparation step fails, the scan is aborted. `-a`, `-i`, and `-A` are the corresponding short options; `--help` displays usage.
+`--auto-add-to-whitelist` runs `wsa-auto-add-to-whitelists.sh`, `--sanitize-images` runs `wsa-sanitize-images.sh`, and `--all` runs both in that order. The final YARA scan runs after the selected steps. If a preparation step fails, the scan is aborted. `--verbose` (or `-v`) shows the matched strings and their offsets. `-a`, `-i`, and `-A` are the preparation steps' corresponding short options; `--help` displays usage.
 
 Objective:
 - identify genuine candidates
