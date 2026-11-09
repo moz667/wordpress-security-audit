@@ -343,6 +343,30 @@ Recommended uses:
 - a recognized official package
 - a false positive that has already been reviewed
 
+### 4) `wsa-process-matches.sh`
+
+Path:
+- `scripts/wsa-process-matches.sh`
+
+Objective:
+- review each distinct file reported by YARA
+- show matching strings and offsets by running YARA with `-s`
+- explicitly choose whether to continue, whitelist, quarantine, or quit
+
+Run interactively:
+
+```bash
+docker compose run --rm wsa /usr/local/bin/wsa-process-matches.sh
+```
+
+Actions:
+- `c` continues to the next file
+- `a` calls `wsa-add-file-to-whitelist.sh` for the selected file
+- `m` moves the selected file to quarantine, preserving its relative path
+- `q` exits the review
+
+The quarantine directory must be outside the WordPress root. Review and validate each finding before whitelisting or moving it, and run this workflow on an isolated copy or snapshot.
+
 ---
 
 ## Project and relevant paths
