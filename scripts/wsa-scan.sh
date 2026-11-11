@@ -7,17 +7,20 @@ SANITIZE_IMAGES_SCRIPT="${SANITIZE_IMAGES_SCRIPT:-/usr/local/bin/wsa-sanitize-im
 
 AUTO_ADD=0
 SANITIZE_IMAGES=0
-
 VERBOSE=0
+SCAN_FILE=""
+SCAN_FILE_SET=0
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTION]
+       $(basename "$0") --file PATH [--verbose]
 
 Run the YARA scan, optionally preparing whitelists first:
   -a, --auto-add-to-whitelist  Generate official and third-party whitelist rules
   -i, --sanitize-images        Sanitize YARA-matched images
   -A, --all                    Run both preparation steps before scanning
+  --file PATH                  Scan one file under the WordPress root; skips preparation
   -v, --verbose                Verbose output
   -h, --help                   Show this help
 EOF
@@ -35,6 +38,16 @@ while [ "$#" -gt 0 ]; do
             AUTO_ADD=1
             SANITIZE_IMAGES=1
             ;;
+        --file)
+            if [ "$SCAN_FILE_SET" -eq 1 ] || [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                echo "Error: --file requires exactly one file path" >&2
+                usage >&2
+                exit 2
+            fi
+            SCAN_FILE="$2"
+            SCAN_FILE_SET=1
+            shift
+            ;;
         -v|--verbose)
             VERBOSE=1
             ;;
@@ -50,6 +63,40 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+SCAN_TARGET="$WWWROOT"
+if [ "$SCAN_FILE_SET" -eq 1 ]; then
+    if [ "$AUTO_ADD" -eq 1 ] || [ "$SANITIZE_IMAGES" -eq 1 ]; then
+        echo "Error: --file cannot be combined with whitelist generation or image sanitization" >&2
+        exit 2
+    fi
+
+    case "$SCAN_FILE" in
+        /*) requested_file="$SCAN_FILE" ;;
+        *) requested_file="$WWWROOT/$SCAN_FILE" ;;
+    esac
+
+    if [ ! -f "$requested_file" ]; then
+        echo "Error: file not found or not a regular file: $SCAN_FILE" >&2
+        exit 2
+    fi
+
+    scan_root=$(realpath "$WWWROOT") || {
+        echo "Error: WordPress root not found: $WWWROOT" >&2
+        exit 2
+    }
+    SCAN_TARGET=$(realpath "$requested_file") || {
+        echo "Error: unable to resolve file path: $SCAN_FILE" >&2
+        exit 2
+    }
+    case "$SCAN_TARGET" in
+        "$scan_root"/*) ;;
+        *)
+            echo "Error: file must be inside the WordPress root: $WWWROOT" >&2
+            exit 2
+            ;;
+    esac
+fi
 
 run_pre_scan_step() {
     step_name=$1
@@ -86,9 +133,17 @@ SCAN_OUTPUT=$(mktemp) || {
 trap 'rm -f "$SCAN_OUTPUT"' EXIT HUP INT TERM
 
 if [ "$VERBOSE" -eq 1 ]; then
-    yara -s -r "$YARA_RULES" "$WWWROOT" > "$SCAN_OUTPUT"
+    if [ "$SCAN_FILE_SET" -eq 1 ]; then
+        yara -s "$YARA_RULES" "$SCAN_TARGET" > "$SCAN_OUTPUT"
+    else
+        yara -s -r "$YARA_RULES" "$SCAN_TARGET" > "$SCAN_OUTPUT"
+    fi
 else
-    yara -r "$YARA_RULES" "$WWWROOT" > "$SCAN_OUTPUT"
+    if [ "$SCAN_FILE_SET" -eq 1 ]; then
+        yara "$YARA_RULES" "$SCAN_TARGET" > "$SCAN_OUTPUT"
+    else
+        yara -r "$YARA_RULES" "$SCAN_TARGET" > "$SCAN_OUTPUT"
+    fi
 fi
 scan_status=$?
 cat "$SCAN_OUTPUT"
@@ -98,4 +153,8 @@ fi
 if [ -s "$SCAN_OUTPUT" ]; then
     exit 0
 fi
-echo "Congrats! The coast is clear (no malware matches found)."
+if [ "$SCAN_FILE_SET" -eq 1 ]; then
+    echo "No malware matches found in $SCAN_TARGET."
+else
+    echo "Congrats! The coast is clear (no malware matches found)."
+fi

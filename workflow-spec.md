@@ -62,6 +62,14 @@ docker compose run --rm -T wsa wsa-scan.sh --verbose
 
 `--auto-add-to-whitelist` runs `wsa-auto-add-to-whitelists.sh`, `--sanitize-images` runs `wsa-sanitize-images.sh`, and `--all` runs both in that order. The final YARA scan reports raw findings; automatic false-positive classification and whitelist changes happen only in the auto-whitelist workflow. If a preparation step fails, the scan is aborted. `--verbose` (or `-v`) shows the matched strings. `-a`, `-i`, and `-A` are the preparation steps' corresponding short options; `--help` displays usage.
 
+To scan one file instead of the entire WordPress tree, pass `--file PATH`:
+
+```bash
+docker compose run --rm -T wsa wsa-scan.sh --file wp-content/plugins/example/file.php --verbose
+```
+
+Relative paths are resolved from `/var/www/html`. Absolute paths are accepted if the resolved file remains inside the WordPress root. This mode scans only that regular file, does not recurse, and cannot be combined with whitelist generation or image sanitization. It is read-only and reports raw YARA matches; a match still requires contextual review.
+
 Objective:
 - identify genuine candidates
 - reduce the set of files to review

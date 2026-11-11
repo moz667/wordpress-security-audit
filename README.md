@@ -65,11 +65,14 @@ docker compose run --rm -T wsa wsa-scan.sh --auto-add-to-whitelist
 docker compose run --rm -T wsa wsa-scan.sh --sanitize-images
 docker compose run --rm -T wsa wsa-scan.sh --all
 docker compose run --rm -T wsa wsa-scan.sh --verbose
+docker compose run --rm -T wsa wsa-scan.sh --file wp-content/plugins/example/file.php --verbose
 ```
 
 `--all` runs automatic official and third-party whitelist generation, then image sanitization, followed by the final scan. Work on an isolated copy when enabling image sanitization.
 
 Use `--verbose` (or `-v`) to show the matched strings and their offsets in addition to the matching rule and file.
+
+Use `--file PATH` to scan one file instead of the full WordPress tree. Relative paths are resolved from `/var/www/html`; absolute paths are also accepted, but the resolved file must remain inside the WordPress root. This is a read-only scan and cannot be combined with automatic whitelist generation or image sanitization. It reports raw YARA findings and is useful for focused triage; it does not validate the file's provenance or determine whether a match is malicious.
 
 For a more beginner-friendly explanation of the security concepts behind YARA, false positives, non-printable characters, and whitelist-based filtering, see [security-for-dummies.md](security-for-dummies.md).
 
