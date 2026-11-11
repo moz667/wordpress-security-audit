@@ -41,7 +41,8 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [--dry-run] [--defer-timestamps] [--stage=third-party|core|plugins|themes|all]
 
-Generate whitelist rules from WordPress.org and third-party package archives.
+Generate whitelist rules from WordPress.org packages, third-party archives, and
+matching loose files in the curated third-party catalog.
 Rules are saved as they are generated. Use --dry-run to preview without
 changing whitelist files. Files that still match YARA are reported in the
 summary and cause a non-zero exit status.
@@ -569,12 +570,14 @@ fi
 case "$STAGE" in
     all)
         process_third_party_catalog || ERRORS=1
+        process_third_party_files || ERRORS=1
         process_core || ERRORS=1
         process_installed_assets plugins Plugin || ERRORS=1
         process_installed_assets themes Theme || ERRORS=1
         ;;
     third-party)
         process_third_party_catalog || ERRORS=1
+        process_third_party_files || ERRORS=1
         ;;
     core)
         process_core || ERRORS=1

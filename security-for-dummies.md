@@ -25,6 +25,7 @@ The goal is not to turn this project into a cybersecurity course, but to help a 
   - [9) Practical takeaway](#9-practical-takeaway)
   - [10) What YARA is and why it is not perfect](#10-what-yara-is-and-why-it-is-not-perfect)
   - [11) Common false positives you will see in WordPress](#11-common-false-positives-you-will-see-in-wordpress)
+    - [Reviewing a font flagged for non-printable characters](#reviewing-a-font-flagged-for-non-printable-characters)
   - [12) Web shells and malware in WordPress](#12-web-shells-and-malware-in-wordpress)
   - [13) Examples of real malware patterns in WordPress](#13-examples-of-real-malware-patterns-in-wordpress)
     - [Example A: PHP backdoor disguised as a plugin method](#example-a-php-backdoor-disguised-as-a-plugin-method)
@@ -362,6 +363,27 @@ Examples include:
 These functions are normal in many WordPress sites, but they are also used by malware. The difference is usually how they are used and where they are called from.
 
 This is why a naive rule may flag a plugin as suspicious even when the plugin is perfectly legitimate. The solution is not to delete the rule, but to refine the rule, inspect the context, and use whitelists where appropriate.
+
+### Reviewing a font flagged for non-printable characters
+
+Font files such as TTF and OTF are binary formats. Their normal tables contain many bytes that are not printable text, so a `NonPrintableChars` match by itself is weak evidence of tampering. Do not remove or rewrite those bytes: that can corrupt the font and does not establish whether it is safe.
+
+Work on an isolated copy and use this triage process:
+
+1. Record the path, file size, SHA-256 hash, and all YARA rules that match. Check whether any rule other than `NonPrintableChars` also matches.
+2. Read the font's metadata with Fontconfig. The project image includes `fc-scan`:
+
+   ```bash
+   docker compose run --rm --entrypoint sh wsa -c \
+     'fc-scan --format="Family: %{family}\nStyle: %{style}\nFull name: %{fullname}\nPostScript name: %{postscriptname}\nVersion: %{fontversion}\nFoundry: %{foundry}\nFormat: %{fontformat}\n" /var/www/html/path/to/font.ttf'
+   ```
+
+   The version value may be an integer encoding of a 16.16 fixed-point number. For example, `155320 / 65536` is approximately `2.369995`, commonly displayed as version `2.37`. Metadata is useful for searching, but can be missing or altered and is not proof of origin.
+3. Use the family, style, PostScript name, version, and any vendor or package clues to locate a reference copy from a trusted source. Check the package's release/version and provenance rather than relying on a matching filename or a mutable branch alone.
+4. Compare the candidate and reference byte-for-byte, or compare their SHA-256 hashes. An exact match establishes that the files are identical to that reference copy. A mismatch is a reason to investigate, not proof of malware; builds and distributions can differ.
+5. If the file parses and matches a trustworthy reference, record the evidence and consider a narrowly scoped manual whitelist entry. Do not use the automatic printable-UTF-8 whitelist path for binary fonts. If no trustworthy reference is available, retain the finding as unverified and continue manual review.
+
+Font metadata parsers and successful parsing are not security guarantees. A structurally valid font can still be altered, and font files may target vulnerabilities in software that parses them. Do not treat `fc-scan` output or a `NonPrintableChars` match alone as a verdict.
 
 ---
 

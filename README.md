@@ -81,6 +81,7 @@ Purpose:
   - `wsa-auto-add-whitelists-core.sh`
   - `wsa-auto-add-whitelists-plugins.sh`
   - `wsa-auto-add-whitelists-themes.sh`
+- Process ZIP archives and loose reference files from the curated third-party catalog; only matching files are added by SHA-256
 - Check PHP matches after trusted-source processing and whitelist files whose only remaining findings are printable valid UTF-8 matched by `NonPrintableChars`
 - Run the comment-only PHP validator for matched PHP files
 - Support `--dry-run` across all stages, without changing whitelist files
@@ -105,7 +106,7 @@ The whitelist rules are currently organized by source and confidence:
 - `yara-rules/whitelists/20-third-party.yar` — packages from the curated third-party volume, including plugins and themes.
 - `yara-rules/whitelists/99-custom.yar` — manually validated exceptions, including custom rules for image false positives.
 
-Rules from ZIPs in `./volumes/third-party` go to `20-third-party.yar`. Rules from the WordPress.org repository, including archives downloaded and stored in the cache by this script, go to `10-oficial-repository.yar`. The cache is reserved for these official downloads. Manually validated exceptions remain in `99-custom.yar`. At the end of a run, `last_updated` is refreshed once in each generated whitelist that received new rules; `--dry-run` does not change timestamps.
+Rules from ZIPs and loose files in `./volumes/third-party` go to `20-third-party.yar`. The catalog is scanned recursively; matching non-ZIP files are added by SHA-256, while ZIP archives continue to be processed separately. Only matching files are added, so only identical file contents are whitelisted. Treat everything in this directory as a trusted reference before running the generator. Rules from the WordPress.org repository, including archives downloaded and stored in the cache by this script, go to `10-oficial-repository.yar`. The cache is reserved for these official downloads. Manually validated exceptions remain in `99-custom.yar`. At the end of a run, `last_updated` is refreshed once in each generated whitelist that received new rules; `--dry-run` does not change timestamps.
 
 The script reads plugin and theme metadata (`Plugin Name:`, `Theme Name:`, `Version:`) from the installed site and resolves matching packages using the fallback chain below. The main plugin file is the PHP file in its root directory with a `Plugin Name:` header in its first 20 lines; theme metadata is read from `style.css`. Only installed packages with YARA findings are resolved this way. Third-party ZIPs are cataloged separately whether or not they are installed.
 

@@ -80,6 +80,7 @@ The main script is:
 
 What it does:
 - runs focused generators for third-party archives, WordPress core, installed plugins, and installed themes
+- scans the curated third-party catalog for loose files as well as ZIP archives; matching loose files are added by SHA-256 to the third-party whitelist
 - shares archive validation, rule validation, hash persistence, and error reporting through the common engine
 - verifies PHP matches after stripping comments and adds the original to the custom whitelist only when no YARA matches remain
 - identifies files whose only rule match is `NonPrintableChars` and adds them to the custom whitelist only when every matched byte span is valid printable UTF-8
@@ -107,7 +108,7 @@ Whitelist rules are organized by source and confidence:
 - `yara-rules/whitelists/20-third-party.yar` — packages from the curated third-party volume, including plugins and themes
 - `yara-rules/whitelists/99-custom.yar` — manually validated exceptions, including custom rules for image false positives
 
-The cache is reserved for archives downloaded by the script from WordPress.org, so cached packages are added to the official-repository whitelist. Archives under `./volumes/third-party` are added to the third-party whitelist. Each validated block is saved immediately, so failures in later packages do not discard earlier rules. At the end of a run, `last_updated` is refreshed once in each generated whitelist that received new rules. In `--dry-run`, the script makes no whitelist or timestamp changes and reports the number of rules that would be added.
+The cache is reserved for archives downloaded by the script from WordPress.org, so cached packages are added to the official-repository whitelist. ZIP archives and loose files under `./volumes/third-party` are added to the third-party whitelist only when they match YARA. The catalog is scanned recursively; matching non-ZIP files are added by SHA-256, while ZIP archives are handled separately. Every generated entry is based on the file's SHA-256, so it only exempts identical content. Treat this directory as a curated trusted-source catalog. Each validated block is saved immediately, so failures in later packages do not discard earlier rules. At the end of a run, `last_updated` is refreshed once in each generated whitelist that received new rules. In `--dry-run`, the script makes no whitelist or timestamp changes and reports the number of rules that would be added.
 
 The script reports progress and a concise final summary rather than printing individual hashes or successful verification lines. The summary includes the number of rules added, files that remain unverified, and errors. After the summary, unavailable reference resources are listed with their type, slug/version, and download URL. Remaining matches require investigation and are not automatically classified as malware.
 

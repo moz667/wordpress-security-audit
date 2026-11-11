@@ -91,3 +91,50 @@ process_third_party_catalog() {
     done < "$archive_list"
     rm -f "$archive_list"
 }
+
+# Generate hash rules for matching non-ZIP files in the curated catalog. ZIP
+# archives are handled separately by process_third_party_catalog.
+process_third_party_files() {
+    local matched_files file line hash relative rules_file
+
+    [ -d "$THIRD_PARTY_ROOT" ] || return 0
+    log "Scanning the third-party catalog for loose-file matches"
+    matched_files=$(mktemp "$WORK_DIR/third-party-files.XXXXXX") || return 1
+    if ! yara_matched_files "$THIRD_PARTY_ROOT" > "$matched_files"; then
+        report_error "YARA scan failed for loose third-party files"
+        rm -f "$matched_files"
+        return 1
+    fi
+
+    rules_file=$(mktemp "$WORK_DIR/third-party-file-rules.XXXXXX") || {
+        rm -f "$matched_files"
+        return 1
+    }
+    while IFS= read -r file; do
+        case "$file" in
+            *.[zZ][iI][pP]) continue ;;
+        esac
+        [ -f "$file" ] || continue
+        if ! line=$(sha256sum "$file"); then
+            report_error "could not hash loose third-party file: $file"
+            rm -f "$matched_files" "$rules_file"
+            return 1
+        fi
+        hash=$(printf '%s\n' "$line" | awk '{print $1}')
+        relative=${file#"$THIRD_PARTY_ROOT"/}
+        relative=$(sanitize_comment "$relative")
+        printf '%shash.sha256(0, filesize) == "%s" or // %s\n' \
+            "$INDENT" "$hash" "$relative" >> "$rules_file" || {
+            report_error "could not stage hash for loose third-party file: $file"
+            rm -f "$matched_files" "$rules_file"
+            return 1
+        }
+    done < "$matched_files"
+    rm -f "$matched_files"
+
+    if [ -s "$rules_file" ]; then
+        add_rules_block "$CANDIDATE_THIRD_PARTY" "third-party" \
+            "loose files (source: third-party catalog)" "$rules_file" || true
+    fi
+    rm -f "$rules_file"
+}
