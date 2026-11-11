@@ -1,7 +1,7 @@
 # Third-party Themes and Plugins
 
 This document describes how to obtain third-party theme and plugin packages. It
-currently documents Avada as an example.
+currently documents Avada and ThemeREX as examples.
 
 Keep the two workflows below separate:
 
@@ -218,3 +218,178 @@ download flow documented here. The locally calculated SHA-256 is still useful
 for identifying the exact archive collected and detecting changes to it later,
 but it is not proof that the archive is authentic or matches a provider's
 release. Record it as a local provenance hash, not as provider verification.
+
+## ThemeREX
+
+The ThemeREX Updater plugin (`trx_updater`) integrates ThemeREX theme and plugin
+updates into WordPress. Its settings are under **Appearance > ThemeREX
+Updater**; when configured with a theme purchase key, updates are offered from
+**Dashboard > Updates**. Do not disclose or log the purchase key.
+
+In the inspected version, the updater gets the active parent theme slug from
+WordPress's `template` option (`elementra` on the sample site) and resolves the
+purchase key in this order:
+
+1. `trx_updater_theme_key` — entered on the ThemeREX Updater settings page.
+2. If the theme's `trx_addons_theme_<template>_activated` option is `1`,
+   `purchase_code_<template>`.
+3. Otherwise, `<template>_theme_code_activation`.
+
+These are per-site `get_option()` values in that site's prefixed options table
+(usually `wp_options`), not network-wide multisite options. `template` is the
+parent theme slug, so a child theme does not change the option suffix. The
+separate `purchase_code_src_<template>` value is used as the market/source
+identifier (`src`), not as the purchase key.
+
+### Downloading ThemeREX theme and plugin packages
+
+The following is an observed manual download flow for the ThemeREX updater
+server, not a provider-documented guarantee. It downloads packages; it does not
+install them. The inspected `trx_updater` 2.2.2 code uses
+`http://upgrade.themerex.net/upgrade.php`. Its requests put the purchase key
+in the URL over unencrypted HTTP, where it may be exposed to network observers
+and URL logs. Prefer a secure HTTPS download from the authenticated provider
+account if available. Use this legacy endpoint only in an isolated,
+controlled environment and only after accepting the credential exposure risk;
+do not print the key, enable shell tracing (`set -x`), or run it on a shared
+host. Ask ThemeREX for a supported HTTPS endpoint before using this for
+production updates.
+
+The commands assume Bash and WP-CLI in the site's WordPress root, with
+`curl`, `grep`, `sed`, and `unzip` available. Set the theme slug/name for the
+site. The example uses Elementra; its `skin` parameter is empty. The updater
+uses a skin only for certain themes (such as `topper-personal`). No version is
+passed to the endpoint, so it does not provide a way to request an arbitrary
+older version.
+
+```bash
+set -euo pipefail
+
+TRX_THEME_SLUG='elementra'
+TRX_THEME_NAME='Elementra'
+TRX_DOWNLOAD_DIR="$PWD/themerex-downloads"
+
+SITE_URL="$(wp option get home)"
+SITE_DOMAIN="${SITE_URL#*://}"
+TRX_UPDATER_THEME_KEY="$(wp option get 'trx_updater_theme_key')"
+TRX_SRC_CODE="$(wp option get "purchase_code_src_$TRX_THEME_SLUG")"
+TRX_THEME_SKIN=''
+# Skin its only required by `topper-personal` theme
+if [ "$TRX_THEME_SLUG" = 'topper-personal' ]; then
+    TRX_STYLESHEET=`wp option get 'stylesheet'`
+    TRX_THEME_SKIN=`wp option get "theme_skin_$TRX_STYLESHEET"`
+fi
+
+if [[ -z "$TRX_UPDATER_THEME_KEY" ]]; then
+    printf '%s\n' 'ThemeREX purchase key is empty; refusing to continue.' >&2
+    exit 1
+fi
+
+mkdir -p "$TRX_DOWNLOAD_DIR"
+
+curl --fail --location --silent --show-error --get \
+    'http://upgrade.themerex.net/upgrade.php' \
+    --data-urlencode 'action=install_theme' \
+    --data-urlencode "src=$TRX_SRC_CODE" \
+    --data-urlencode "key=$TRX_UPDATER_THEME_KEY" \
+    --data-urlencode "theme_slug=$TRX_THEME_SLUG" \
+    --data-urlencode "theme_name=$TRX_THEME_NAME" \
+    --data-urlencode "skin=$TRX_THEME_SKIN" \
+    --data-urlencode "domain=$SITE_DOMAIN" \
+    --data-urlencode "rnd=$RANDOM" \
+    --output "$TRX_DOWNLOAD_DIR/$TRX_THEME_SLUG.zip"
+
+while IFS= read -r plugin; do
+    plugin_zip="$(basename "$plugin")"
+    printf 'Downloading theme-supplied plugin package: %s\n' "$plugin"
+    curl --fail --location --silent --show-error --get \
+        'http://upgrade.themerex.net/upgrade.php' \
+        --data-urlencode 'action=install_plugin' \
+        --data-urlencode "src=$TRX_SRC_CODE" \
+        --data-urlencode "key=$TRX_UPDATER_THEME_KEY" \
+        --data-urlencode "theme_slug=$TRX_THEME_SLUG" \
+        --data-urlencode "theme_name=$TRX_THEME_NAME" \
+        --data-urlencode "plugin=$plugin" \
+        --data-urlencode "domain=$SITE_DOMAIN" \
+        --data-urlencode "rnd=$RANDOM" \
+        --output "$TRX_DOWNLOAD_DIR/$plugin_zip"
+done < <(
+    grep -RhoE --include='*.php' \
+        "get_plugin_source_path[[:space:]]*\\([[:space:]]*['\"]plugins/[^'\"]+\\.zip['\"]" \
+        "wp-content/themes/$TRX_THEME_SLUG" |
+        sed -E "s/.*['\"]plugins\\///; s/['\"].*//" |
+        sort -u
+)
+
+find "$TRX_DOWNLOAD_DIR" -maxdepth 1 -type f -name '*.zip' -print
+```
+
+The plugin loop extracts package paths passed to
+`elementra_get_plugin_source_path()` in the theme source. It does not mean
+every plugin recommended by the theme is supplied by ThemeREX. For the
+inspected Elementra theme, this includes packages such as `trx_addons`,
+`trx_updater`, `trx-wcext`, and (when enabled/activated)
+`sitepress-multilingual-cms`; Elementor is not downloaded by this mechanism.
+The plugin request uses `plugin=<slug>/<slug>.zip` and does not send `skin`.
+
+Before installing packages, confirm that each response is actually a ZIP:
+
+```bash
+for archive in "$TRX_DOWNLOAD_DIR"/*.zip; do
+    unzip -tq "$archive"
+done
+```
+
+Inspect the archive listing and internal version headers without executing PHP.
+Compare the versions with the site's recorded versions; the endpoint's response
+and filename alone do not prove a specific version. If the intended exact
+version is unavailable, record that rather than substituting another release.
+
+### Installing the downloaded packages
+
+Only install on an isolated copy or staging site after a backup. Upload the
+verified parent theme ZIP via **Appearance > Themes > Add New > Upload Theme**
+and each plugin ZIP via **Plugins > Add New > Upload Plugin**. Preserve the
+child theme (for example, `elementra-child`) and local customizations. If
+WordPress does not offer to replace an installed plugin, use the site's
+controlled deployment procedure with a backup; do not delete its directory
+first. Re-check installed version headers and test the site before promoting
+the update.
+
+### Preparing ThemeREX reference archives for the whitelist
+
+This workflow only catalogs packages; it does not install or activate them.
+Use the downloads above (or archives obtained over HTTPS from the provider)
+and save them under the repository's curated third-party volume, using the
+installed slug and the version confirmed inside each archive:
+
+```text
+volumes/third-party/themerex/themes/elementra.<version>.zip
+volumes/third-party/themerex/plugins/trx_addons.<version>.zip
+volumes/third-party/themerex/plugins/trx_updater.<version>.zip
+```
+
+Only add packages that are available and relevant to the site. For example, if
+`trx_updater` is not being cataloged, omit its archive. Confirm that each
+archive passes `unzip -tq`, inspect its internal version header without running
+its PHP, and compare the version with the site's recorded version before
+labeling it as an exact reference. The packages downloaded above have generic
+filenames; rename them using the verified versions when copying them into the
+catalog. Calculate and retain local provenance hashes for the collected
+packages:
+
+```bash
+ELEMENTRA_VERSION='<verified-version>'
+TRX_ADDONS_VERSION='<verified-version>'
+mkdir -p volumes/third-party/themerex/themes volumes/third-party/themerex/plugins
+cp themerex-downloads/elementra.zip \
+    "volumes/third-party/themerex/themes/elementra.$ELEMENTRA_VERSION.zip"
+cp themerex-downloads/trx_addons.zip \
+    "volumes/third-party/themerex/plugins/trx_addons.$TRX_ADDONS_VERSION.zip"
+
+sha256sum "volumes/third-party/themerex/themes/elementra.$ELEMENTRA_VERSION.zip"
+sha256sum "volumes/third-party/themerex/plugins/trx_addons.$TRX_ADDONS_VERSION.zip"
+```
+
+If cataloging `trx_updater`, calculate its hash in the same way. These local
+hashes identify the archives collected; they are not provider verification.
