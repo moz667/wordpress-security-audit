@@ -4,9 +4,15 @@ WWWROOT="${WWWROOT:-/var/www/html}"
 YARA_RULES="${YARA_RULES:-/usr/share/yara-rules/php.yar}"
 WHITELIST_HELPER="${WHITELIST_HELPER:-/usr/local/bin/wsa-add-file-to-whitelist.sh}"
 PHP_BIN="${PHP_BIN:-php84}"
+DRY_RUN=0
+
+if [ "$#" -eq 2 ] && [ "$1" = "--dry-run" ]; then
+    DRY_RUN=1
+    shift
+fi
 
 if [ "$#" -ne 1 ]; then
-    echo "Usage: $(basename "$0") <php-file>" >&2
+    echo "Usage: $(basename "$0") [--dry-run] <php-file>" >&2
     exit 2
 fi
 
@@ -125,7 +131,9 @@ if [ -s "$scan_output" ]; then
     exit 3
 fi
 
-if "$WHITELIST_HELPER" "$file_path"; then
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "No YARA matches remain after removing PHP comments; would add original to custom whitelist: $relpath"
+elif "$WHITELIST_HELPER" "$file_path"; then
     echo "No YARA matches remain after removing PHP comments; original added to custom whitelist: $relpath"
 else
     echo "Error: could not add $relpath to the custom whitelist" >&2

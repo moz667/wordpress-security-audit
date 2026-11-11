@@ -60,7 +60,7 @@ docker compose run --rm -T wsa wsa-scan.sh --all
 docker compose run --rm -T wsa wsa-scan.sh --verbose
 ```
 
-`--auto-add-to-whitelist` runs `wsa-auto-add-to-whitelists.sh`, `--sanitize-images` runs `wsa-sanitize-images.sh`, and `--all` runs both in that order. The final YARA scan runs after the selected steps. If a preparation step fails, the scan is aborted. `--verbose` (or `-v`) shows the matched strings and their offsets. `-a`, `-i`, and `-A` are the preparation steps' corresponding short options; `--help` displays usage.
+`--auto-add-to-whitelist` runs `wsa-auto-add-to-whitelists.sh`, `--sanitize-images` runs `wsa-sanitize-images.sh`, and `--all` runs both in that order. The final YARA scan reports raw findings; automatic false-positive classification and whitelist changes happen only in the auto-whitelist workflow. If a preparation step fails, the scan is aborted. `--verbose` (or `-v`) shows the matched strings. `-a`, `-i`, and `-A` are the preparation steps' corresponding short options; `--help` displays usage.
 
 Objective:
 - identify genuine candidates
@@ -79,13 +79,13 @@ The main script is:
 - `scripts/wsa-auto-add-to-whitelists.sh`
 
 What it does:
-- scans the site and records files that trigger YARA
-- processes every ZIP in the curated third-party volume, including packages not installed in the site
-- resolves official core, plugin, and theme reference packages for installed files that trigger YARA
-- generates hashes for matching files in those trusted packages
+- runs focused generators for third-party archives, WordPress core, installed plugins, and installed themes
+- shares archive validation, rule validation, hash persistence, and error reporting through the common engine
+- verifies PHP matches after stripping comments and adds the original to the custom whitelist only when no YARA matches remain
+- identifies files whose only rule match is `NonPrintableChars` and adds them to the custom whitelist only when every matched byte span is valid printable UTF-8
+- keeps control characters, invalid UTF-8, and files matching any other YARA rule out of this automatic UTF-8 whitelist path
 - persists each validated rule block as it is generated
 - supports `--dry-run` to preview without changing whitelist files
-- validates the candidate rules and rescans the files found in the initial site scan
 
 Default command (generates and persists rules incrementally):
 
@@ -99,7 +99,9 @@ Preview command:
 docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh --dry-run
 ```
 
-Whitelist rules are now organized by source and confidence:
+The source-specific entry points are `wsa-auto-add-whitelists-third-party.sh`, `wsa-auto-add-whitelists-core.sh`, `wsa-auto-add-whitelists-plugins.sh`, and `wsa-auto-add-whitelists-themes.sh`. They use source-focused function modules and the shared engine under `scripts/lib/`. The orchestrator updates source-whitelist timestamps once after all trusted-source stages complete.
+
+Whitelist rules are organized by source and confidence:
 
 - `yara-rules/whitelists/10-oficial-repository.yar` — files verified against the official WordPress repository
 - `yara-rules/whitelists/20-third-party.yar` — packages from the curated third-party volume, including plugins and themes

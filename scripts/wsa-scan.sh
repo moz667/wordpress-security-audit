@@ -9,7 +9,6 @@ AUTO_ADD=0
 SANITIZE_IMAGES=0
 
 VERBOSE=0
-SCAN_EXTRA_ARGS=""
 
 usage() {
     cat <<EOF
@@ -38,7 +37,6 @@ while [ "$#" -gt 0 ]; do
             ;;
         -v|--verbose)
             VERBOSE=1
-            SCAN_EXTRA_ARGS="-s"
             ;;
         -h|--help)
             usage
@@ -87,14 +85,17 @@ SCAN_OUTPUT=$(mktemp) || {
 }
 trap 'rm -f "$SCAN_OUTPUT"' EXIT HUP INT TERM
 
-if yara $SCAN_EXTRA_ARGS -r "$YARA_RULES" "$WWWROOT" > "$SCAN_OUTPUT"; then
-    cat "$SCAN_OUTPUT"
-    if [ -s "$SCAN_OUTPUT" ]; then
-        exit 0
-    fi
-    echo "Congrats! The coast is clear (no malware matches found)."
+if [ "$VERBOSE" -eq 1 ]; then
+    yara -s -r "$YARA_RULES" "$WWWROOT" > "$SCAN_OUTPUT"
 else
-    scan_status=$?
-    cat "$SCAN_OUTPUT"
+    yara -r "$YARA_RULES" "$WWWROOT" > "$SCAN_OUTPUT"
+fi
+scan_status=$?
+cat "$SCAN_OUTPUT"
+if [ "$scan_status" -ne 0 ]; then
     exit "$scan_status"
 fi
+if [ -s "$SCAN_OUTPUT" ]; then
+    exit 0
+fi
+echo "Congrats! The coast is clear (no malware matches found)."

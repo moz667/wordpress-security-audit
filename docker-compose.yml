@@ -8,12 +8,7 @@ services:
       - yara-rules:/usr/share/yara-rules:rw
       - ./volumes/third-party:/usr/local/share/src/third-party:ro
       - ./volumes/cache:/usr/share/cache/wordpress-security-audit:rw
-      - ./scripts/wsa-auto-add-to-whitelists.sh:/usr/local/bin/wsa-auto-add-to-whitelists.sh:ro
-      - ./scripts/wsa-sanitize-images.sh:/usr/local/bin/wsa-sanitize-images.sh:ro
-      - ./scripts/wsa-add-file-to-whitelist.sh:/usr/local/bin/wsa-add-file-to-whitelist.sh:ro
-      - ./scripts/wsa-whitelist-comment-only.sh:/usr/local/bin/wsa-whitelist-comment-only.sh:ro
-      - ./scripts/wsa-process-matches.sh:/usr/local/bin/wsa-process-matches.sh:ro
-      - ./scripts/wsa-scan.sh:/usr/local/bin/wsa-scan.sh:ro
+      - ./scripts:/usr/local/bin:ro
 
 volumes:
   yara-rules:

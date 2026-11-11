@@ -7,7 +7,7 @@ RUN apk update && \
     imagemagick-jp2 imagemagick-pdf imagemagick-raw \
     imagemagick-svg
 
-COPY scripts/* /usr/local/bin/
+COPY scripts/ /usr/local/bin/
 COPY yara-rules /usr/share/yara-rules
 
 VOLUME /var/www/html

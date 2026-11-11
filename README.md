@@ -49,10 +49,12 @@ docker run --rm \
   -v "$PWD/volumes/www:/var/www/html:ro" \
   -v "$PWD/volumes/yara-rules:/usr/share/yara-rules:ro" \
   wordpress-security-audit \
-  yara -r /usr/share/yara-rules/php.yar /var/www/html
+  wsa-scan.sh
 ```
 
 The `docker-compose.yml` file does exactly this for the project workflow, mounting the YARA rule set as a separate volume so you can customize or extend the whitelist without modifying the image itself.
+
+`wsa-scan.sh` reports raw YARA findings. The optional automatic-whitelist workflow separately reviews PHP-comment-only findings and `NonPrintableChars` findings: it adds a file to the custom whitelist for the latter only when every matched byte span is valid printable UTF-8 and no other YARA rule matches the file. Control characters, invalid UTF-8, and files matching other rules remain findings. Direct `yara` commands always show raw matches.
 
 The image also exposes the helper scripts under `/usr/local/bin/`, so they can be executed directly inside the container as needed.
 
@@ -74,15 +76,16 @@ For a more beginner-friendly explanation of the security concepts behind YARA, f
 ### Script 1: `wsa-auto-add-to-whitelists.sh`
 
 Purpose:
-- Detect the WordPress version installed in `/var/www/html`
-- Process every ZIP in the curated third-party volume, including packages not installed in the audited site
-- Resolve official WordPress, plugin and theme packages for installed files that trigger `php.yar`
-- Generate hash rules for matching files from those reference packages:
-  - WordPress core files
-  - Installed plugins
-  - Installed themes
+- Orchestrate four focused trusted-source generators:
+  - `wsa-auto-add-whitelists-third-party.sh`
+  - `wsa-auto-add-whitelists-core.sh`
+  - `wsa-auto-add-whitelists-plugins.sh`
+  - `wsa-auto-add-whitelists-themes.sh`
+- Check PHP matches after trusted-source processing and whitelist files whose only remaining findings are printable valid UTF-8 matched by `NonPrintableChars`
+- Run the comment-only PHP validator for matched PHP files
+- Support `--dry-run` across all stages, without changing whitelist files
 
-Run the generator to persist each validated rule block as it is generated:
+Run the orchestrator to generate trusted-source rules and review the supported false-positive cases:
 
 ```bash
 docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh
@@ -94,7 +97,7 @@ To preview changes without writing them:
 docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh --dry-run
 ```
 
-Progress and a concise summary are printed to stderr. Hash rules are stored in the mounted whitelist files rather than printed to stdout. If a package cannot be resolved, processing continues and already validated rules remain saved. After the summary, the script lists unavailable resources with their type, slug/version, and download URL. Unresolved files or package errors cause a non-zero exit status.
+The source-specific scripts use the shared archive-validation and whitelist-persistence engine and separate source modules under `scripts/lib/`. Each entry point can also be run directly to generate only its source category. Progress and package resolution errors are reported on stderr. The custom whitelist is updated only after the comment-only or UTF-8 checks meet their criteria; `--dry-run` reports candidates without changing files.
 
 The whitelist rules are currently organized by source and confidence:
 
