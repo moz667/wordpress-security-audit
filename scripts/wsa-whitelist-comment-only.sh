@@ -5,14 +5,34 @@ YARA_RULES="${YARA_RULES:-/usr/share/yara-rules/php.yar}"
 WHITELIST_HELPER="${WHITELIST_HELPER:-/usr/local/bin/wsa-add-file-to-whitelist.sh}"
 PHP_BIN="${PHP_BIN:-php84}"
 DRY_RUN=0
+SUPPRESS_MATCH_DETAILS=0
 
-if [ "$#" -eq 2 ] && [ "$1" = "--dry-run" ]; then
-    DRY_RUN=1
-    shift
-fi
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        --quiet-match-details)
+            SUPPRESS_MATCH_DETAILS=1
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "Error: unknown option: $1" >&2
+            exit 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 if [ "$#" -ne 1 ]; then
-    echo "Usage: $(basename "$0") [--dry-run] <php-file>" >&2
+    echo "Usage: $(basename "$0") [--dry-run] [--quiet-match-details] <php-file>" >&2
     exit 2
 fi
 
@@ -127,7 +147,9 @@ if [ -s "$scan_output" ]; then
         echo "Error: detailed YARA scan failed for comment-stripped $relpath (exit status $yara_status)" >&2
         exit "$yara_status"
     fi
-    cat "$detailed_output"
+    if [ "$SUPPRESS_MATCH_DETAILS" -eq 0 ]; then
+        cat "$detailed_output"
+    fi
     exit 3
 fi
 

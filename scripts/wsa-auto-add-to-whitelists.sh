@@ -193,11 +193,11 @@ while IFS= read -r file; do
     esac
     if [ "$DRY_RUN" -eq 1 ]; then
         WHITELIST_HELPER="$CUSTOM_WHITELIST_HELPER" CUSTOM_WHITELIST="$CUSTOM_WHITELIST" \
-            "$COMMENT_WHITELIST_SCRIPT" --dry-run "$file"
+            "$COMMENT_WHITELIST_SCRIPT" --dry-run --quiet-match-details "$file"
         status=$?
     else
         WHITELIST_HELPER="$CUSTOM_WHITELIST_HELPER" CUSTOM_WHITELIST="$CUSTOM_WHITELIST" \
-            "$COMMENT_WHITELIST_SCRIPT" "$file"
+            "$COMMENT_WHITELIST_SCRIPT" --quiet-match-details "$file"
         status=$?
     fi
     case "$status" in

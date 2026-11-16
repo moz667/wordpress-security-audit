@@ -101,7 +101,7 @@ To preview changes without writing them:
 docker compose run --rm -T wsa /usr/local/bin/wsa-auto-add-to-whitelists.sh --dry-run
 ```
 
-The source-specific scripts use the shared archive-validation and whitelist-persistence engine and separate source modules under `scripts/lib/`. Each entry point can also be run directly to generate only its source category. Progress and package resolution errors are reported on stderr. The custom whitelist is updated only after the comment-only or UTF-8 checks meet their criteria; `--dry-run` reports candidates without changing files.
+The source-specific scripts use the shared archive-validation and whitelist-persistence engine and separate source modules under `scripts/lib/`. Each entry point can also be run directly to generate only its source category. Progress and package resolution errors are reported on stderr. The custom whitelist is updated only after the comment-only or UTF-8 checks meet their criteria; `--dry-run` reports candidates without changing files. During the orchestrated run, comment-only PHP files that remain unverified do not print detailed YARA matches; stage summaries and errors remain visible. Running `wsa-whitelist-comment-only.sh` directly still shows the detailed matches by default.
 
 The whitelist rules are currently organized by source and confidence:
 
