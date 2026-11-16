@@ -151,6 +151,48 @@ while IFS= read -r file <&3 || [ -n "$file" ]; do
         continue
     fi
 
+    rule_counts=$(awk '
+        /^[[:space:]]*0x[[:xdigit:]]+:/ {
+            string_id = $0
+            sub(/^[[:space:]]*0x[[:xdigit:]]+:/, "", string_id)
+            sub(/:.*/, "", string_id)
+            if (current_rule != "" && string_id != "") {
+                key = current_rule SUBSEP string_id
+                if (!(key in seen)) {
+                    order[++match_count] = key
+                    seen[key] = 1
+                    rule[key] = current_rule
+                    string[key] = string_id
+                    matches[key] = 0
+                }
+                matches[key]++
+            }
+            next
+        }
+        NF {
+            current_rule = $1
+        }
+        END {
+            if (match_count == 0)
+                exit 1
+            for (i = 1; i <= match_count; i++) {
+                key = order[i]
+                suffix = matches[key] == 1 ? "match" : "matches"
+                printf "  %d %s:%s %s\n", matches[key], rule[key], string[key], suffix
+            }
+        }
+    ' "$detailed_matches") || {
+        echo "Error: could not count matching YARA strings by rule and string identifier for $file_path" >&2
+        status=1
+        continue
+    }
+    if [ -z "$rule_counts" ]; then
+        echo "Error: could not count matching YARA strings by rule and string identifier for $file_path" >&2
+        status=1
+        continue
+    fi
+    printf '\nMatching YARA strings by rule and string identifier:\n%s\n' "$rule_counts"
+
     while :; do
         printf '\nAction [c]ontinue, [a]dd to whitelist, [v]erify comments, [m]ove to quarantine, [q]uit: '
         if ! IFS= read -r choice; then

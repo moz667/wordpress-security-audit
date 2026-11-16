@@ -362,6 +362,7 @@ Path:
 Objective:
 - review each distinct file reported by YARA
 - show matching strings and offsets by running YARA with `-s`
+- count matched strings by YARA rule and string identifier before the action prompt
 - explicitly choose whether to continue, whitelist, quarantine, or quit
 - optionally verify whether matches are confined to PHP comments before whitelisting
 
