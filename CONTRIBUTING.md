@@ -19,6 +19,12 @@ gh pr checks
 gh pr diff
 ```
 
+## Changes that do not require a release
+
+Documentation updates and other changes that do not affect the application can still follow the pull request workflow above. Create a branch, open a pull request targeting `main`, review the diff, and merge it when ready.
+
+After merging, do not create a version tag or GitHub Release just for these changes. They will be included in the next release that is published. If a change is small and the repository's contribution rules allow direct commits to `main`, a pull request may be optional, but the diff should still be reviewed.
+
 ## Releases and version tags
 
 Use Semantic Versioning tags prefixed with `v`, such as `v0.1.0`. While the major version is `0`, the project is in initial development and its public interfaces may change.
