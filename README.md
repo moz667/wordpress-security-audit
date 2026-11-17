@@ -168,6 +168,16 @@ For each file, the script lists the number of matches grouped by YARA rule and s
 ## TODO
 
 * [ ] Search for installed malware:
-  * [ ] Site code **In progress**
+  * [X] Site code
   * [ ] Data / Database
-* [ ] Check for vulnerabilities in installed WordPress versions, plugins, and themes
+* [ ] Check for vulnerabilities on installed WordPress versions, plugins, and themes
+
+## TODO (in the future)
+
+* [ ] Move complex workflow orchestration and processing logic to modular Python code while keeping the existing command-line entry points compatible.
+* [ ] Make scanning read-only by default; grant write access only to explicitly requested operations that modify site files or whitelist rules.
+* [ ] Preserve the original scan evidence, including matched rules and file hashes, before applying whitelist changes.
+* [ ] Add machine-readable JSON reports with tool and rule versions, findings, and errors; define distinct exit statuses for clean scans, findings, and execution errors.
+* [ ] Add automated tests for workflow behavior, edge cases, and YARA rule regressions, including false-positive and missed-detection checks.
+* [ ] Define clear workflow phases with explicit inputs, outputs, and side effects, separating candidate discovery from applying changes.
+* [ ] Record tool and rule versions in scan reports and make dependency updates reproducible.
