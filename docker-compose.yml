@@ -3,8 +3,12 @@ services:
     build:
       context: ./
     volumes:
-      - ./volumes/www:/var/www/html:ro
-      - yara-rules:/usr/share/yara-rules:ro
+      - ./volumes/www:/var/www/html:rw
+      - ./volumes/quarantine:/var/www/quarantine:rw
+      - yara-rules:/usr/share/yara-rules:rw
+      - ./volumes/third-party:/usr/local/share/src/third-party:ro
+      - ./volumes/cache:/usr/share/cache/wordpress-security-audit:rw
+      - ./scripts:/usr/local/bin:ro
 
 volumes:
   yara-rules:
